@@ -1,0 +1,180 @@
+@baseUrl = http://localhost:5201
+@adminUserName = admin
+@adminPassword = Admin123! 
+
+@name adminLogin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "userName": "{{adminUserName}}",
+  "password": "{{adminPassword}}"
+}
+ 
+###
+@adminToken = {{adminLogin.response.body.$.token}}
+
+### 2. Create a normal user — should succeed (200)
+@name createUser1
+POST {{baseUrl}}/api/users/createuser
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "fullName": "Test Worker",
+  "userName": "testworker1",
+  "email": "worker1@neotonic.local",
+  "password": "Password123!",
+  "roles": ["User"]
+}
+
+###
+@createdUserId1 = {{createUser1.response.body.$.userId}}
+
+### 3. Create a second user with multiple roles — should succeed (200)
+@name createUser2
+POST {{baseUrl}}/api/users/createuser
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "fullName": "Test Manager",
+  "userName": "testmanager1",
+  "email": "manager1@neotonic.local",
+  "password": "Password123!",
+  "roles": ["Manager", "User"]
+}
+
+###
+@createdUserId2 = {{createUser2.response.body.$.userId}}
+
+### 4. Create a second admin (needed later to test self-delete succeeding when not last admin)
+@name createUser3
+POST {{baseUrl}}/api/users/createuser
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "fullName": "Second Admin",
+  "userName": "secondadmin",
+  "email": "secondadmin@neotonic.local",
+  "password": "Password123!",
+  "roles": ["Admin"]
+}
+
+###
+@createdAdminId = {{createUser3.response.body.$.userId}}
+
+### 5. Create user — duplicate username — should FAIL (400)
+POST {{baseUrl}}/api/users/createuser
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "fullName": "Duplicate",
+  "userName": "testworker1",
+  "email": "different@neotonic.local",
+  "password": "Password123!",
+  "roles": ["User"]
+}
+
+### 6. Create user — nonexistent role — should FAIL (400)
+POST {{baseUrl}}/api/users/createuser
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "fullName": "Bad Role Test",
+  "userName": "badroleuser",
+  "email": "badrole@neotonic.local",
+  "password": "Password123!",
+  "roles": ["SuperDuperAdmin"]
+}
+
+### 7. Create user — no auth token at all — should FAIL (401)
+POST {{baseUrl}}/api/users/createuser
+Content-Type: application/json
+
+{
+  "fullName": "No Token",
+  "userName": "notoken",
+  "email": "notoken@neotonic.local",
+  "password": "Password123!",
+  "roles": ["User"]
+}
+
+### 8. Delete a normal (non-admin) user — should succeed (200)
+DELETE {{baseUrl}}/api/users/deleteuser/{{createdUserId1}}
+Authorization: Bearer {{adminToken}}
+
+### 9. Try to delete the second ADMIN via the normal delete route — should FAIL (400)
+DELETE {{baseUrl}}/api/users/deleteuser/{{createdAdminId}}
+Authorization: Bearer {{adminToken}}
+
+### 10. Login as the second admin — capture their token for self-delete tests
+@name secondAdminLogin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "userName": "secondadmin",
+  "password": "Password123!"
+}
+
+###
+@secondAdminToken = {{secondAdminLogin.response.body.$.token}}
+
+### 11. Second admin deletes THEMSELVES — should succeed (200)
+DELETE {{baseUrl}}/api/users/me
+Authorization: Bearer {{secondAdminToken}}
+
+### 12. Original (now only) admin tries to delete themselves — should FAIL (400, last admin)
+DELETE {{baseUrl}}/api/users/me
+Authorization: Bearer {{adminToken}}
+
+### 13. Remove "Admin" role from another admin
+@name createUser4
+POST {{baseUrl}}/api/users/createuser
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "fullName": "Third Admin",
+  "userName": "thirdadmin",
+  "email": "thirdadmin@neotonic.local",
+  "password": "Password123!",
+  "roles": ["Admin"]
+}
+
+###
+@thirdAdminId = {{createUser4.response.body.$.userId}}
+
+###
+POST {{baseUrl}}/api/users/remove_role
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "userId": "{{thirdAdminId}}",
+  "role": "Admin"
+}
+
+### 14. Remove "Manager" role from a non-admin user — should succeed (200)
+POST {{baseUrl}}/api/users/remove_role
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "userId": "{{createdUserId2}}",
+  "role": "Manager"
+}
+
+### 15. Remove a role the user doesn't have — should FAIL (404)
+POST {{baseUrl}}/api/users/remove_role
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "userId": "{{createdUserId2}}",
+  "role": "Manager"
+}

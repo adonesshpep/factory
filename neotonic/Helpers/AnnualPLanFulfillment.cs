@@ -1,0 +1,27 @@
+﻿//using neotonic.Models;
+
+//namespace neotonic.Helpers
+//{
+//    public static class AnnualPLanFulfillment
+//    {
+//        public static async Task<Dictionary<int, decimal>> GetFulfilledQuantitiesAsync(
+//           this AppDbContext context,
+//           IEnumerable<int> annualPlanIds,
+//           int? excludeRFQId = null)
+//        {
+//            var ids = annualPlanIds.Distinct().ToList();
+
+//            return await context.PurchaseOrders
+//                .Where(p => ids.Contains(p.ContractReviewId)
+//                            && p.IsActive
+//                            && p.Status != POStatus.Cancelled
+//                            && (excludePurchaseOrderId == null || p.Id != excludePurchaseOrderId))
+//                .GroupBy(p => p.ContractReviewId)
+//                .Select(g => new { ContractReviewId = g.Key, Total = g.Sum(p => p.Quantity) })
+//                .ToDictionaryAsync(x => x.ContractReviewId, x => x.Total);
+//        }
+
+//        public static decimal Percentage(decimal fulfilled, decimal total) =>
+//            total <= 0 ? 0 : Math.Round(fulfilled / total * 100, 2);
+//    }
+//}
