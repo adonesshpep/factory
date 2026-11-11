@@ -7,6 +7,7 @@ namespace neotonic.DTOs.Creates
         [Required] public int? StepNumber { get; set; }
         public string? StepNameEn { get; set; }
         public string? StepNameAr { get; set; }
+        public int? VirtualLocationId { get; set; }
         [MaxLength(1000)] public string? Notes { get; set; }
         public int? BoxPathId { get; set; }
         [MaxLength(500)] public string? Color { get; set; } = "#FFFFFF";

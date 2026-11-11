@@ -1,5 +1,4 @@
-﻿// DTOs/AnnualPlanResponseDto.cs
-using neotonic.Models;
+﻿using neotonic.Models;
 
 public class AnnualPlanResponseDto
 {
@@ -17,5 +16,11 @@ public class AnnualPlanResponseDto
     public string AnnualPlanStatusNameAr { get; set; } = string.Empty;
     public string? Notes { get; set; }
     public bool IsActive { get; set; }
+
+    // Plan-level rollup percentages (average of per-line %, each line capped at 100)
+    public decimal RequestedPercentage { get; set; }
+    public decimal ContractedPercentage { get; set; }
+    public decimal OrderedPercentage { get; set; }
+
     public List<AnnualPlanDetailResponseDto> Details { get; set; } = new();
 }

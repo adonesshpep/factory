@@ -21,6 +21,12 @@ namespace neotonic.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.HasSequence("memo_rw_in_number_seq");
+
+            modelBuilder.HasSequence("uom_material_seq");
+
+            modelBuilder.HasSequence("uom_product_seq");
+
             modelBuilder.HasSequence<int>("worker_number_seq");
 
             modelBuilder.Entity("AppUser", b =>
@@ -501,12 +507,12 @@ namespace neotonic.Migrations
                         .HasColumnType("int")
                         .HasColumnName("result");
 
-                    b.Property<int>("SupplierSampleId")
+                    b.Property<int>("SampleId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SupplierSampleId");
+                    b.HasIndex("SampleId");
 
                     b.HasIndex(new[] { "Number" }, "ix_certificates_of_analysis_number")
                         .IsUnique();
@@ -515,7 +521,7 @@ namespace neotonic.Migrations
                         {
                             t.HasCheckConstraint("ck_certificates_of_analysis_moisture", "[moisture_percentage] >= 0 AND [moisture_percentage] <= 100");
 
-                            t.HasCheckConstraint("ck_certificates_of_analysis_rejection", "([result] = 1 AND [rejection_reason] IS NULL) OR ([result] = 2 AND [rejection_reason] IS NOT NULL)");
+                            t.HasCheckConstraint("ck_certificates_of_analysis_rejection", "([result] = 0 AND [rejection_reason] IS NULL) OR ([result] = 1 AND [rejection_reason] IS NULL) OR ([result] = 2 AND [rejection_reason] IS NOT NULL)");
                         });
                 });
 
@@ -643,9 +649,6 @@ namespace neotonic.Migrations
                         .HasColumnType("bit")
                         .HasColumnName("is_active");
 
-                    b.Property<int>("MaterialId")
-                        .HasColumnType("int");
-
                     b.Property<string>("Notes")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)")
@@ -661,6 +664,9 @@ namespace neotonic.Migrations
                         .HasColumnType("decimal(18,3)")
                         .HasColumnName("quantity");
 
+                    b.Property<int>("RFQId")
+                        .HasColumnType("int");
+
                     b.Property<int>("Status")
                         .HasColumnType("int")
                         .HasColumnName("status");
@@ -670,7 +676,7 @@ namespace neotonic.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("MaterialId");
+                    b.HasIndex("RFQId");
 
                     b.HasIndex("SupplierId");
 
@@ -722,6 +728,253 @@ namespace neotonic.Migrations
                         .IsUnique();
 
                     b.ToTable("departments");
+                });
+
+            modelBuilder.Entity("neotonic.Models.Flow", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("name_ar");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("name_en");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "NameAr" }, "ix_flows_name_ar")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "NameEn" }, "ix_flows_name_en")
+                        .IsUnique();
+
+                    b.ToTable("flows");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            IsActive = true,
+                            NameAr = "عضوي",
+                            NameEn = "Organic"
+                        },
+                        new
+                        {
+                            Id = 2,
+                            IsActive = true,
+                            NameAr = "كيميائي",
+                            NameEn = "Chemical"
+                        },
+                        new
+                        {
+                            Id = 3,
+                            IsActive = true,
+                            NameAr = "تعبئة",
+                            NameEn = "Filling"
+                        });
+                });
+
+            modelBuilder.Entity("neotonic.Models.FlowStep", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("FlowId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("LocationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrderIndex")
+                        .HasColumnType("int")
+                        .HasColumnName("order_index");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LocationId");
+
+                    b.HasIndex(new[] { "FlowId", "OrderIndex" }, "ix_flow_steps_flow_order")
+                        .IsUnique();
+
+                    b.ToTable("flow_steps");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            FlowId = 1,
+                            LocationId = 11,
+                            OrderIndex = 1
+                        },
+                        new
+                        {
+                            Id = 2,
+                            FlowId = 1,
+                            LocationId = 21,
+                            OrderIndex = 2
+                        },
+                        new
+                        {
+                            Id = 3,
+                            FlowId = 1,
+                            LocationId = 41,
+                            OrderIndex = 3
+                        },
+                        new
+                        {
+                            Id = 4,
+                            FlowId = 1,
+                            LocationId = 51,
+                            OrderIndex = 4
+                        },
+                        new
+                        {
+                            Id = 5,
+                            FlowId = 2,
+                            LocationId = 21,
+                            OrderIndex = 1
+                        },
+                        new
+                        {
+                            Id = 6,
+                            FlowId = 2,
+                            LocationId = 41,
+                            OrderIndex = 2
+                        },
+                        new
+                        {
+                            Id = 7,
+                            FlowId = 2,
+                            LocationId = 51,
+                            OrderIndex = 3
+                        },
+                        new
+                        {
+                            Id = 8,
+                            FlowId = 3,
+                            LocationId = 31,
+                            OrderIndex = 1
+                        },
+                        new
+                        {
+                            Id = 9,
+                            FlowId = 3,
+                            LocationId = 41,
+                            OrderIndex = 2
+                        },
+                        new
+                        {
+                            Id = 10,
+                            FlowId = 3,
+                            LocationId = 51,
+                            OrderIndex = 3
+                        });
+                });
+
+            modelBuilder.Entity("neotonic.Models.Inventory", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)")
+                        .HasColumnName("code");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("name_ar");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("name_en");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int")
+                        .HasColumnName("sort_order");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "Code" }, "ix_inventories_code")
+                        .IsUnique();
+
+                    b.ToTable("inventories");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Code = "I1",
+                            IsActive = true,
+                            NameAr = "الاستلام",
+                            NameEn = "Receiving",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Id = 2,
+                            Code = "I2",
+                            IsActive = true,
+                            NameAr = "التحضير",
+                            NameEn = "Preparing",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Id = 3,
+                            Code = "FIL",
+                            IsActive = true,
+                            NameAr = "التعبئة",
+                            NameEn = "Filling",
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Id = 4,
+                            Code = "PRD",
+                            IsActive = true,
+                            NameAr = "المنتجات المنتجة",
+                            NameEn = "Products produced",
+                            SortOrder = 4
+                        },
+                        new
+                        {
+                            Id = 5,
+                            Code = "PTS",
+                            IsActive = true,
+                            NameAr = "المنتجات الجاهزة",
+                            NameEn = "Products ready to sell",
+                            SortOrder = 5
+                        });
                 });
 
             modelBuilder.Entity("neotonic.Models.LabEquipment", b =>
@@ -779,6 +1032,288 @@ namespace neotonic.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("lab_equipments");
+                });
+
+            modelBuilder.Entity("neotonic.Models.Location", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("code");
+
+                    b.Property<int?>("InventoryId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("NameAr")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("name_ar");
+
+                    b.Property<string>("NameEn")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .HasColumnName("name_en");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int")
+                        .HasColumnName("sort_order");
+
+                    b.Property<int?>("Zone")
+                        .HasColumnType("int")
+                        .HasColumnName("zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "Code" }, "ix_locations_code")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "InventoryId", "Zone" }, "ix_locations_inventory_zone")
+                        .IsUnique()
+                        .HasFilter("[InventoryId] IS NOT NULL AND [zone] IS NOT NULL");
+
+                    b.ToTable("locations", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_locations_inventory_zone", "([kind] = 1 AND [InventoryId] IS NOT NULL AND [zone] IS NOT NULL) OR ([kind] = 2 AND [InventoryId] IS NULL AND [zone] IS NULL)");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 11,
+                            Code = "I1-QUAR",
+                            InventoryId = 1,
+                            IsActive = true,
+                            Kind = 1,
+                            NameAr = "حجر الاستلام",
+                            NameEn = "Receiving quarantine",
+                            SortOrder = 1,
+                            Zone = 1
+                        },
+                        new
+                        {
+                            Id = 12,
+                            Code = "I1-ACC",
+                            InventoryId = 1,
+                            IsActive = true,
+                            Kind = 1,
+                            NameAr = "مقبول الاستلام",
+                            NameEn = "Receiving accepted",
+                            SortOrder = 2,
+                            Zone = 2
+                        },
+                        new
+                        {
+                            Id = 13,
+                            Code = "I1-REJ",
+                            InventoryId = 1,
+                            IsActive = true,
+                            Kind = 1,
+                            NameAr = "مرفوض الاستلام",
+                            NameEn = "Receiving rejected",
+                            SortOrder = 3,
+                            Zone = 3
+                        },
+                        new
+                        {
+                            Id = 21,
+                            Code = "I2-QUAR",
+                            InventoryId = 2,
+                            IsActive = true,
+                            Kind = 1,
+                            NameAr = "حجر التحضير",
+                            NameEn = "Preparing quarantine",
+                            SortOrder = 4,
+                            Zone = 1
+                        },
+                        new
+                        {
+                            Id = 22,
+                            Code = "I2-ACC",
+                            InventoryId = 2,
+                            IsActive = true,
+                            Kind = 1,
+                            NameAr = "مقبول التحضير",
+                            NameEn = "Preparing accepted",
+                            SortOrder = 5,
+                            Zone = 2
+                        },
+                        new
+                        {
+                            Id = 23,
+                            Code = "I2-REJ",
+                            InventoryId = 2,
+                            IsActive = true,
+                            Kind = 1,
+                            NameAr = "مرفوض التحضير",
+                            NameEn = "Preparing rejected",
+                            SortOrder = 6,
+                            Zone = 3
+                        },
+                        new
+                        {
+                            Id = 31,
+                            Code = "FIL-QUAR",
+                            InventoryId = 3,
+                            IsActive = true,
+                            Kind = 1,
+                            NameAr = "حجر التعبئة",
+                            NameEn = "Filling quarantine",
+                            SortOrder = 7,
+                            Zone = 1
+                        },
+                        new
+                        {
+                            Id = 32,
+                            Code = "FIL-ACC",
+                            InventoryId = 3,
+                            IsActive = true,
+                            Kind = 1,
+                            NameAr = "مقبول التعبئة",
+                            NameEn = "Filling accepted",
+                            SortOrder = 8,
+                            Zone = 2
+                        },
+                        new
+                        {
+                            Id = 33,
+                            Code = "FIL-REJ",
+                            InventoryId = 3,
+                            IsActive = true,
+                            Kind = 1,
+                            NameAr = "مرفوض التعبئة",
+                            NameEn = "Filling rejected",
+                            SortOrder = 9,
+                            Zone = 3
+                        },
+                        new
+                        {
+                            Id = 41,
+                            Code = "PRD-QUAR",
+                            InventoryId = 4,
+                            IsActive = true,
+                            Kind = 1,
+                            NameAr = "حجر المنتجات المنتجة",
+                            NameEn = "Products produced quarantine",
+                            SortOrder = 10,
+                            Zone = 1
+                        },
+                        new
+                        {
+                            Id = 42,
+                            Code = "PRD-ACC",
+                            InventoryId = 4,
+                            IsActive = true,
+                            Kind = 1,
+                            NameAr = "مقبول المنتجات المنتجة",
+                            NameEn = "Products produced accepted",
+                            SortOrder = 11,
+                            Zone = 2
+                        },
+                        new
+                        {
+                            Id = 43,
+                            Code = "PRD-REJ",
+                            InventoryId = 4,
+                            IsActive = true,
+                            Kind = 1,
+                            NameAr = "مرفوض المنتجات المنتجة",
+                            NameEn = "Products produced rejected",
+                            SortOrder = 12,
+                            Zone = 3
+                        },
+                        new
+                        {
+                            Id = 51,
+                            Code = "PTS-QUAR",
+                            InventoryId = 5,
+                            IsActive = true,
+                            Kind = 1,
+                            NameAr = "حجر الجاهز",
+                            NameEn = "Ready to sell quarantine",
+                            SortOrder = 13,
+                            Zone = 1
+                        },
+                        new
+                        {
+                            Id = 52,
+                            Code = "PTS-ACC",
+                            InventoryId = 5,
+                            IsActive = true,
+                            Kind = 1,
+                            NameAr = "مقبول الجاهز",
+                            NameEn = "Ready to sell accepted",
+                            SortOrder = 14,
+                            Zone = 2
+                        },
+                        new
+                        {
+                            Id = 53,
+                            Code = "PTS-REJ",
+                            InventoryId = 5,
+                            IsActive = true,
+                            Kind = 1,
+                            NameAr = "مرفوض الجاهز",
+                            NameEn = "Ready to sell rejected",
+                            SortOrder = 15,
+                            Zone = 3
+                        },
+                        new
+                        {
+                            Id = 901,
+                            Code = "VIRT-CONSUMED",
+                            IsActive = true,
+                            Kind = 2,
+                            NameAr = "مستهلك",
+                            NameEn = "Consumed",
+                            SortOrder = 16
+                        },
+                        new
+                        {
+                            Id = 902,
+                            Code = "VIRT-SCRAP",
+                            IsActive = true,
+                            Kind = 2,
+                            NameAr = "تالف",
+                            NameEn = "Scrap",
+                            SortOrder = 17
+                        },
+                        new
+                        {
+                            Id = 903,
+                            Code = "VIRT-SUPPLIER",
+                            IsActive = true,
+                            Kind = 2,
+                            NameAr = "مرتجع للمورد",
+                            NameEn = "Supplier returns",
+                            SortOrder = 18
+                        },
+                        new
+                        {
+                            Id = 904,
+                            Code = "VIRT-PROD",
+                            IsActive = true,
+                            Kind = 2,
+                            NameAr = "أرضية الإنتاج",
+                            NameEn = "Production floor",
+                            SortOrder = 19
+                        });
                 });
 
             modelBuilder.Entity("neotonic.Models.Machine", b =>
@@ -926,6 +1461,9 @@ namespace neotonic.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("FlowId")
+                        .HasColumnType("int");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit")
                         .HasColumnName("is_active");
@@ -941,6 +1479,8 @@ namespace neotonic.Migrations
                         .HasColumnName("name_en");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("FlowId");
 
                     b.HasIndex("NameAr")
                         .IsUnique();
@@ -1099,6 +1639,186 @@ namespace neotonic.Migrations
                         .IsUnique();
 
                     b.ToTable("memo_detail_uoms");
+                });
+
+            modelBuilder.Entity("neotonic.Models.MemoRWDetail", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("MemoId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Tear")
+                        .HasColumnType("decimal(18,3)")
+                        .HasColumnName("tear");
+
+                    b.Property<int>("UomId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MemoId");
+
+                    b.HasIndex(new[] { "UomId" }, "ix_memo_rw_details_uom")
+                        .IsUnique();
+
+                    b.ToTable("memo_rw_details", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_memo_rw_details_tear", "[tear] >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("neotonic.Models.MemoRWIn", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<DateTime>("MemoDate")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("memo_date");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnName("notes");
+
+                    b.Property<long>("Number")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("number")
+                        .HasDefaultValueSql("NEXT VALUE FOR memo_rw_in_number_seq");
+
+                    b.Property<int>("PurchaseOrderId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("WorkerId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PurchaseOrderId");
+
+                    b.HasIndex("WorkerId");
+
+                    b.HasIndex(new[] { "Number" }, "ix_memo_rw_in_number")
+                        .IsUnique();
+
+                    b.ToTable("memo_rw_in");
+                });
+
+            modelBuilder.Entity("neotonic.Models.Notification", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_read");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnName("message");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("read_at");
+
+                    b.Property<int?>("RelatedId")
+                        .HasColumnType("int")
+                        .HasColumnName("related_id");
+
+                    b.Property<int>("RelatedType")
+                        .HasColumnType("int")
+                        .HasColumnName("related_type");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)")
+                        .HasColumnName("role");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "CreatedAt" }, "ix_notifications_created");
+
+                    b.HasIndex(new[] { "Role", "IsRead" }, "ix_notifications_role_read");
+
+                    b.HasIndex(new[] { "UserId", "IsRead" }, "ix_notifications_user_read");
+
+                    b.ToTable("notifications", (string)null);
+                });
+
+            modelBuilder.Entity("neotonic.Models.PreparingOrder", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnName("notes");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("number");
+
+                    b.Property<DateTime>("OrderDate")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("order_date");
+
+                    b.Property<int>("ProtocolId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("TransferOrderId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProtocolId");
+
+                    b.HasIndex("TransferOrderId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_preparing_orders_transfer_order")
+                        .HasFilter("[TransferOrderId] IS NOT NULL");
+
+                    b.HasIndex(new[] { "Number" }, "ix_preparing_orders_number")
+                        .IsUnique();
+
+                    b.ToTable("preparing_orders");
                 });
 
             modelBuilder.Entity("neotonic.Models.Product", b =>
@@ -1302,6 +2022,157 @@ namespace neotonic.Migrations
                     b.ToTable("purchase_orders");
                 });
 
+            modelBuilder.Entity("neotonic.Models.RFQ", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AnnualPlanID")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreationDate")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("creation_date");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<int>("MaterialId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnName("notes");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("number");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18,3)")
+                        .HasColumnName("quantity");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AnnualPlanID");
+
+                    b.HasIndex("MaterialId");
+
+                    b.HasIndex(new[] { "Number" }, "ix_rfqs_number")
+                        .IsUnique();
+
+                    b.ToTable("rfqs");
+                });
+
+            modelBuilder.Entity("neotonic.Models.ReleaseOrder", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<int?>("ManufacturingOrderId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnName("notes");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("number");
+
+                    b.Property<DateTime>("OrderDate")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("order_date");
+
+                    b.Property<int?>("TransferOrderId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TransferOrderId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_release_orders_transfer_order")
+                        .HasFilter("[TransferOrderId] IS NOT NULL");
+
+                    b.HasIndex(new[] { "Number" }, "ix_release_orders_number")
+                        .IsUnique();
+
+                    b.ToTable("release_orders");
+                });
+
+            modelBuilder.Entity("neotonic.Models.Sample", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("ContractReviewId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnName("notes");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("number");
+
+                    b.Property<DateTime>("SampleDate")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("sample_date");
+
+                    b.Property<int>("SampleType")
+                        .HasColumnType("int")
+                        .HasColumnName("sample_type");
+
+                    b.Property<int?>("UomId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "ContractReviewId" }, "ix_samples_contract_review");
+
+                    b.HasIndex(new[] { "Number" }, "ix_samples_number")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "UomId" }, "ix_samples_uom");
+
+                    b.ToTable("samples", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_samples_link", "([sample_type] = 1 AND [ContractReviewId] IS NOT NULL AND [UomId] IS NULL) OR ([sample_type] = 2 AND [UomId] IS NOT NULL AND [ContractReviewId] IS NULL)");
+                        });
+                });
+
             modelBuilder.Entity("neotonic.Models.Scale", b =>
                 {
                     b.Property<int>("Id")
@@ -1395,6 +2266,86 @@ namespace neotonic.Migrations
                         .IsUnique();
 
                     b.ToTable("scale_equalizations");
+                });
+
+            modelBuilder.Entity("neotonic.Models.ScrapOrder", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)")
+                        .HasColumnName("notes");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)")
+                        .HasColumnName("number");
+
+                    b.Property<DateTime>("OrderDate")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("order_date");
+
+                    b.Property<int?>("TransferOrderId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TransferOrderId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_scrap_orders_transfer_order")
+                        .HasFilter("[TransferOrderId] IS NOT NULL");
+
+                    b.HasIndex(new[] { "Number" }, "ix_scrap_orders_number")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "TransferOrderId" }, "ix_scrap_orders_transfer_order")
+                        .IsUnique()
+                        .HasFilter("[TransferOrderId] IS NOT NULL");
+
+                    b.ToTable("scrap_orders");
+                });
+
+            modelBuilder.Entity("neotonic.Models.Shelf", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_active");
+
+                    b.Property<int>("LocationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("int")
+                        .HasColumnName("number");
+
+                    b.HasKey("Id");
+
+                    b.HasAlternateKey("Id", "LocationId")
+                        .HasName("ak_shelves_id_location");
+
+                    b.HasIndex(new[] { "Id", "LocationId" }, "ix_shelves_id_location")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "LocationId", "Number" }, "ix_shelves_location_number")
+                        .IsUnique();
+
+                    b.ToTable("shelves");
                 });
 
             modelBuilder.Entity("neotonic.Models.Step", b =>
@@ -1493,6 +2444,80 @@ namespace neotonic.Migrations
                     b.ToTable("step_types");
                 });
 
+            modelBuilder.Entity("neotonic.Models.StockMove", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("FromLocationId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("FromShelfId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("MoveDate")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("move_date");
+
+                    b.Property<int>("MoveType")
+                        .HasColumnType("int")
+                        .HasColumnName("move_type");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18,3)")
+                        .HasColumnName("quantity");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<int?>("SourceId")
+                        .HasColumnType("int")
+                        .HasColumnName("source_id");
+
+                    b.Property<int>("SourceType")
+                        .HasColumnType("int")
+                        .HasColumnName("source_type");
+
+                    b.Property<int>("ToLocationId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ToShelfId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UomId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FromLocationId");
+
+                    b.HasIndex("FromShelfId");
+
+                    b.HasIndex("ToLocationId");
+
+                    b.HasIndex("ToShelfId");
+
+                    b.HasIndex(new[] { "SourceType", "SourceId" }, "ix_stock_moves_source");
+
+                    b.HasIndex(new[] { "UomId", "MoveDate" }, "ix_stock_moves_uom_date");
+
+                    b.ToTable("stock_moves", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_stock_moves_quantity", "[quantity] > 0");
+                        });
+                });
+
             modelBuilder.Entity("neotonic.Models.Supplier", b =>
                 {
                     b.Property<int>("Id")
@@ -1557,20 +2582,13 @@ namespace neotonic.Migrations
                     b.ToTable("suppliers");
                 });
 
-            modelBuilder.Entity("neotonic.Models.SupplierSample", b =>
+            modelBuilder.Entity("neotonic.Models.SupplierReturnOrder", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("ContractReviewId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("DeliveryDate")
-                        .HasColumnType("datetime2")
-                        .HasColumnName("delivery_date");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit")
@@ -1587,17 +2605,113 @@ namespace neotonic.Migrations
                         .HasColumnType("nvarchar(50)")
                         .HasColumnName("number");
 
+                    b.Property<DateTime>("OrderDate")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("order_date");
+
                     b.Property<int>("SupplierId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("TransferOrderId")
                         .HasColumnType("int");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ContractReviewId");
+                    b.HasIndex("SupplierId");
 
-                    b.HasIndex(new[] { "Number" }, "ix_supplier_samples_number")
+                    b.HasIndex("TransferOrderId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_supplier_return_orders_transfer_order")
+                        .HasFilter("[TransferOrderId] IS NOT NULL");
+
+                    b.HasIndex(new[] { "Number" }, "ix_supplier_return_orders_number")
                         .IsUnique();
 
-                    b.ToTable("supplier_samples");
+                    b.HasIndex(new[] { "TransferOrderId" }, "ix_supplier_return_orders_transfer_order")
+                        .IsUnique()
+                        .HasFilter("[TransferOrderId] IS NOT NULL");
+
+                    b.ToTable("supplier_return_orders");
+                });
+
+            modelBuilder.Entity("neotonic.Models.TransferOrder", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime?>("ExecutedAt")
+                        .HasColumnType("datetime2")
+                        .HasColumnName("executed_at");
+
+                    b.Property<int>("FromLocationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MaterialId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18,3)")
+                        .HasColumnName("quantity");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int")
+                        .HasColumnName("status");
+
+                    b.Property<int>("ToLocationId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FromLocationId");
+
+                    b.HasIndex("MaterialId");
+
+                    b.HasIndex("ToLocationId");
+
+                    b.HasIndex(new[] { "Status" }, "ix_transfer_orders_status");
+
+                    b.ToTable("transfer_orders", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_transfer_orders_locations", "[FromLocationId] <> [ToLocationId]");
+                        });
+                });
+
+            modelBuilder.Entity("neotonic.Models.TransferOrderLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsScanned")
+                        .HasColumnType("bit")
+                        .HasColumnName("is_scanned");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("decimal(18,3)")
+                        .HasColumnName("quantity");
+
+                    b.Property<int>("TransferOrderId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UomId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex(new[] { "TransferOrderId", "UomId" }, "ix_transfer_order_lines_order_uom")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "UomId" }, "ix_transfer_order_lines_uom");
+
+                    b.ToTable("transfer_order_lines", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_transfer_order_lines_quantity", "[quantity] > 0");
+                        });
                 });
 
             modelBuilder.Entity("neotonic.Models.UOM", b =>
@@ -1618,45 +2732,68 @@ namespace neotonic.Migrations
                         .HasColumnType("int")
                         .HasColumnName("box_number");
 
+                    b.Property<int>("Kind")
+                        .HasColumnType("int")
+                        .HasColumnName("kind");
+
+                    b.Property<int>("LocationId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Lot")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)")
                         .HasColumnName("lot");
 
-                    b.Property<int>("MaterialId")
+                    b.Property<int?>("MaterialId")
                         .HasColumnType("int");
 
                     b.Property<long>("Number")
                         .HasColumnType("bigint")
                         .HasColumnName("number");
 
+                    b.Property<int?>("ParentUomId")
+                        .HasColumnType("int");
+
                     b.Property<int>("PrintCount")
                         .HasColumnType("int")
                         .HasColumnName("print_count");
 
-                    b.Property<decimal>("QuantityIn")
-                        .HasColumnType("decimal(18,3)")
-                        .HasColumnName("quantity_in");
+                    b.Property<int?>("ProductId")
+                        .HasColumnType("int");
 
-                    b.Property<decimal>("QuantityOut")
+                    b.Property<decimal>("Quantity")
                         .HasColumnType("decimal(18,3)")
-                        .HasColumnName("quantity_out");
+                        .HasColumnName("quantity");
 
-                    b.Property<decimal>("QuantityWorkOrder")
-                        .HasColumnType("decimal(18,3)")
-                        .HasColumnName("quantity_work_order");
+                    b.Property<int?>("ShelfId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
                     b.HasIndex("MaterialId");
 
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("ShelfId", "LocationId");
+
                     b.HasIndex(new[] { "Barcode" }, "ix_uoms_barcode")
                         .IsUnique();
+
+                    b.HasIndex(new[] { "LocationId", "MaterialId" }, "ix_uoms_location_material");
+
+                    b.HasIndex(new[] { "LocationId", "ProductId" }, "ix_uoms_location_product");
 
                     b.HasIndex(new[] { "Number" }, "ix_uoms_number")
                         .IsUnique();
 
-                    b.ToTable("uoms");
+                    b.HasIndex(new[] { "ParentUomId" }, "ix_uoms_parent_uom");
+
+                    b.ToTable("uoms", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_uoms_kind_link", "([kind] = 1 AND [MaterialId] IS NOT NULL AND [ProductId] IS NULL) OR ([kind] = 2 AND [ProductId] IS NOT NULL AND [MaterialId] IS NULL)");
+
+                            t.HasCheckConstraint("ck_uoms_quantity", "[quantity] >= 0");
+                        });
                 });
 
             modelBuilder.Entity("neotonic.Models.WorkOrder", b =>
@@ -1935,13 +3072,13 @@ namespace neotonic.Migrations
 
             modelBuilder.Entity("neotonic.Models.CertificateOfAnalysis", b =>
                 {
-                    b.HasOne("neotonic.Models.SupplierSample", "SupplierSample")
+                    b.HasOne("neotonic.Models.Sample", "Sample")
                         .WithMany()
-                        .HasForeignKey("SupplierSampleId")
+                        .HasForeignKey("SampleId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("SupplierSample");
+                    b.Navigation("Sample");
                 });
 
             modelBuilder.Entity("neotonic.Models.CleaningRequest", b =>
@@ -1993,9 +3130,9 @@ namespace neotonic.Migrations
 
             modelBuilder.Entity("neotonic.Models.ContractReview", b =>
                 {
-                    b.HasOne("neotonic.Models.Material", "Material")
+                    b.HasOne("neotonic.Models.RFQ", "RFQ")
                         .WithMany()
-                        .HasForeignKey("MaterialId")
+                        .HasForeignKey("RFQId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -2005,9 +3142,38 @@ namespace neotonic.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("Material");
+                    b.Navigation("RFQ");
 
                     b.Navigation("Supplier");
+                });
+
+            modelBuilder.Entity("neotonic.Models.FlowStep", b =>
+                {
+                    b.HasOne("neotonic.Models.Flow", "Flow")
+                        .WithMany("Steps")
+                        .HasForeignKey("FlowId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("neotonic.Models.Location", "Location")
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Flow");
+
+                    b.Navigation("Location");
+                });
+
+            modelBuilder.Entity("neotonic.Models.Location", b =>
+                {
+                    b.HasOne("neotonic.Models.Inventory", "Inventory")
+                        .WithMany("Locations")
+                        .HasForeignKey("InventoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Inventory");
                 });
 
             modelBuilder.Entity("neotonic.Models.Machine", b =>
@@ -2038,6 +3204,16 @@ namespace neotonic.Migrations
                     b.Navigation("Category");
 
                     b.Navigation("MaterialType");
+                });
+
+            modelBuilder.Entity("neotonic.Models.MaterialType", b =>
+                {
+                    b.HasOne("neotonic.Models.Flow", "Flow")
+                        .WithMany()
+                        .HasForeignKey("FlowId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Flow");
                 });
 
             modelBuilder.Entity("neotonic.Models.Memo", b =>
@@ -2093,6 +3269,62 @@ namespace neotonic.Migrations
                     b.Navigation("MemoDetail");
 
                     b.Navigation("Uom");
+                });
+
+            modelBuilder.Entity("neotonic.Models.MemoRWDetail", b =>
+                {
+                    b.HasOne("neotonic.Models.MemoRWIn", "Memo")
+                        .WithMany("Details")
+                        .HasForeignKey("MemoId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("neotonic.Models.UOM", "Uom")
+                        .WithOne("MemoRWDetail")
+                        .HasForeignKey("neotonic.Models.MemoRWDetail", "UomId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Memo");
+
+                    b.Navigation("Uom");
+                });
+
+            modelBuilder.Entity("neotonic.Models.MemoRWIn", b =>
+                {
+                    b.HasOne("neotonic.Models.PurchaseOrder", "PurchaseOrder")
+                        .WithMany()
+                        .HasForeignKey("PurchaseOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("neotonic.Models.Worker", "Worker")
+                        .WithMany()
+                        .HasForeignKey("WorkerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("PurchaseOrder");
+
+                    b.Navigation("Worker");
+                });
+
+            modelBuilder.Entity("neotonic.Models.PreparingOrder", b =>
+                {
+                    b.HasOne("neotonic.Models.Protocol", "Protocol")
+                        .WithMany()
+                        .HasForeignKey("ProtocolId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("neotonic.Models.TransferOrder", "TransferOrder")
+                        .WithOne()
+                        .HasForeignKey("neotonic.Models.PreparingOrder", "TransferOrderId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("Protocol");
+
+                    b.Navigation("TransferOrder");
                 });
 
             modelBuilder.Entity("neotonic.Models.Product", b =>
@@ -2155,6 +3387,51 @@ namespace neotonic.Migrations
                     b.Navigation("ContractReview");
                 });
 
+            modelBuilder.Entity("neotonic.Models.RFQ", b =>
+                {
+                    b.HasOne("neotonic.Models.AnnualPlan", "AnnualPlan")
+                        .WithMany()
+                        .HasForeignKey("AnnualPlanID")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("neotonic.Models.Material", "Material")
+                        .WithMany()
+                        .HasForeignKey("MaterialId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AnnualPlan");
+
+                    b.Navigation("Material");
+                });
+
+            modelBuilder.Entity("neotonic.Models.ReleaseOrder", b =>
+                {
+                    b.HasOne("neotonic.Models.TransferOrder", "TransferOrder")
+                        .WithOne()
+                        .HasForeignKey("neotonic.Models.ReleaseOrder", "TransferOrderId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("TransferOrder");
+                });
+
+            modelBuilder.Entity("neotonic.Models.Sample", b =>
+                {
+                    b.HasOne("neotonic.Models.ContractReview", "ContractReview")
+                        .WithMany()
+                        .HasForeignKey("ContractReviewId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("neotonic.Models.UOM", "Uom")
+                        .WithMany("Samples")
+                        .HasForeignKey("UomId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ContractReview");
+
+                    b.Navigation("Uom");
+                });
+
             modelBuilder.Entity("neotonic.Models.Scale", b =>
                 {
                     b.HasOne("neotonic.Models.Department", "Department")
@@ -2185,6 +3462,27 @@ namespace neotonic.Migrations
                     b.Navigation("Worker");
                 });
 
+            modelBuilder.Entity("neotonic.Models.ScrapOrder", b =>
+                {
+                    b.HasOne("neotonic.Models.TransferOrder", "TransferOrder")
+                        .WithOne()
+                        .HasForeignKey("neotonic.Models.ScrapOrder", "TransferOrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("TransferOrder");
+                });
+
+            modelBuilder.Entity("neotonic.Models.Shelf", b =>
+                {
+                    b.HasOne("neotonic.Models.Location", "Location")
+                        .WithMany("Shelves")
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Location");
+                });
+
             modelBuilder.Entity("neotonic.Models.Step", b =>
                 {
                     b.HasOne("neotonic.Models.BoxPath", "BoxPath")
@@ -2203,26 +3501,149 @@ namespace neotonic.Migrations
                     b.Navigation("StepType");
                 });
 
-            modelBuilder.Entity("neotonic.Models.SupplierSample", b =>
+            modelBuilder.Entity("neotonic.Models.StockMove", b =>
                 {
-                    b.HasOne("neotonic.Models.ContractReview", "ContractReview")
+                    b.HasOne("neotonic.Models.Location", "FromLocation")
                         .WithMany()
-                        .HasForeignKey("ContractReviewId")
+                        .HasForeignKey("FromLocationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("ContractReview");
+                    b.HasOne("neotonic.Models.Shelf", "FromShelf")
+                        .WithMany()
+                        .HasForeignKey("FromShelfId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("neotonic.Models.Location", "ToLocation")
+                        .WithMany()
+                        .HasForeignKey("ToLocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("neotonic.Models.Shelf", "ToShelf")
+                        .WithMany()
+                        .HasForeignKey("ToShelfId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("neotonic.Models.UOM", "Uom")
+                        .WithMany()
+                        .HasForeignKey("UomId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("FromLocation");
+
+                    b.Navigation("FromShelf");
+
+                    b.Navigation("ToLocation");
+
+                    b.Navigation("ToShelf");
+
+                    b.Navigation("Uom");
                 });
 
-            modelBuilder.Entity("neotonic.Models.UOM", b =>
+            modelBuilder.Entity("neotonic.Models.SupplierReturnOrder", b =>
                 {
+                    b.HasOne("neotonic.Models.Supplier", "Supplier")
+                        .WithMany()
+                        .HasForeignKey("SupplierId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("neotonic.Models.TransferOrder", "TransferOrder")
+                        .WithOne()
+                        .HasForeignKey("neotonic.Models.SupplierReturnOrder", "TransferOrderId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Supplier");
+
+                    b.Navigation("TransferOrder");
+                });
+
+            modelBuilder.Entity("neotonic.Models.TransferOrder", b =>
+                {
+                    b.HasOne("neotonic.Models.Location", "FromLocation")
+                        .WithMany()
+                        .HasForeignKey("FromLocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("neotonic.Models.Material", "Material")
                         .WithMany()
                         .HasForeignKey("MaterialId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("neotonic.Models.Location", "ToLocation")
+                        .WithMany()
+                        .HasForeignKey("ToLocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("FromLocation");
+
                     b.Navigation("Material");
+
+                    b.Navigation("ToLocation");
+                });
+
+            modelBuilder.Entity("neotonic.Models.TransferOrderLine", b =>
+                {
+                    b.HasOne("neotonic.Models.TransferOrder", "TransferOrder")
+                        .WithMany("Lines")
+                        .HasForeignKey("TransferOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("neotonic.Models.UOM", "Uom")
+                        .WithMany()
+                        .HasForeignKey("UomId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("TransferOrder");
+
+                    b.Navigation("Uom");
+                });
+
+            modelBuilder.Entity("neotonic.Models.UOM", b =>
+                {
+                    b.HasOne("neotonic.Models.Location", "Location")
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("neotonic.Models.Material", "Material")
+                        .WithMany()
+                        .HasForeignKey("MaterialId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("neotonic.Models.UOM", "Parent")
+                        .WithMany("Children")
+                        .HasForeignKey("ParentUomId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("neotonic.Models.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("neotonic.Models.Shelf", "Shelf")
+                        .WithMany()
+                        .HasForeignKey("ShelfId", "LocationId")
+                        .HasPrincipalKey("Id", "LocationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Location");
+
+                    b.Navigation("Material");
+
+                    b.Navigation("Parent");
+
+                    b.Navigation("Product");
+
+                    b.Navigation("Shelf");
                 });
 
             modelBuilder.Entity("neotonic.Models.WorkOrderDetail", b =>
@@ -2273,6 +3694,21 @@ namespace neotonic.Migrations
                     b.Navigation("Roles");
                 });
 
+            modelBuilder.Entity("neotonic.Models.Flow", b =>
+                {
+                    b.Navigation("Steps");
+                });
+
+            modelBuilder.Entity("neotonic.Models.Inventory", b =>
+                {
+                    b.Navigation("Locations");
+                });
+
+            modelBuilder.Entity("neotonic.Models.Location", b =>
+                {
+                    b.Navigation("Shelves");
+                });
+
             modelBuilder.Entity("neotonic.Models.Memo", b =>
                 {
                     b.Navigation("Details");
@@ -2283,9 +3719,28 @@ namespace neotonic.Migrations
                     b.Navigation("UOMs");
                 });
 
+            modelBuilder.Entity("neotonic.Models.MemoRWIn", b =>
+                {
+                    b.Navigation("Details");
+                });
+
             modelBuilder.Entity("neotonic.Models.Protocol", b =>
                 {
                     b.Navigation("ProtocolSteps");
+                });
+
+            modelBuilder.Entity("neotonic.Models.TransferOrder", b =>
+                {
+                    b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("neotonic.Models.UOM", b =>
+                {
+                    b.Navigation("Children");
+
+                    b.Navigation("MemoRWDetail");
+
+                    b.Navigation("Samples");
                 });
 
             modelBuilder.Entity("neotonic.Models.WorkOrder", b =>

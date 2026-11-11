@@ -13,7 +13,10 @@
         public int WorkerNumber { get; set; }
         public string WorkerNameEn { get; set; } = string.Empty;
         public string WorkerNameAr { get; set; } = string.Empty;
-
+        public int? MaterialId { get; set; }
+        public string? MaterialNumber { get; set; }
+        public string? MaterialNameEn { get; set; }
+        public string? MaterialNameAr { get; set; }
         public string? Notes { get; set; }
         public bool IsActive { get; set; }
 

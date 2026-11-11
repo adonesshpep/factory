@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿// Models/ContractReview.cs  (CHANGED - MaterialId removed; material comes from the RFQ)
+using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -25,20 +26,18 @@ namespace neotonic.Models
 
         [ForeignKey(nameof(SupplierId))]
         public Supplier Supplier { get; set; } = null!;
+
+        // Required: the material is read from this RFQ, never stored here.
         public int RFQId { get; set; }
 
         [ForeignKey(nameof(RFQId))]
         public RFQ RFQ { get; set; } = null!;
+
         [Column("connection_method")]
         public ConnectionMethods ConnectionMethod { get; set; } = ConnectionMethods.Phone;
 
         [Column("status")]
         public CRStatus Status { get; set; } = CRStatus.New;
-
-        public int MaterialId { get; set; }
-
-        [ForeignKey(nameof(MaterialId))]
-        public Material Material { get; set; } = null!;
 
         [Column("quantity", TypeName = "decimal(18,3)")]
         public decimal Quantity { get; set; }

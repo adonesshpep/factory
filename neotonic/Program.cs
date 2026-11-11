@@ -81,6 +81,8 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod();
     });
 });
+builder.Services.AddScoped<ITransferOrderService, TransferOrderService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
 // ---- Build happens ONLY after all services are registered ----
 var app = builder.Build();
 using (var scope = app.Services.CreateScope())
@@ -101,7 +103,7 @@ using (var scope = app.Services.CreateScope())
 {
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
-    string[] roles = { "Admin", "Manager", "Sales", "Lab", "User", "Production", "Accounting", "Warehouse" };
+    string[] roles = { "Admin", "Technical", "Manager", "Sales", "Lab", "User", "Production", "Accounting", "Warehouse", "Maintenance" , "Financial Manager" , "Warehouse Keeper", "Marketing Manager", "Marketing Representative","HR", "Quality Manager","QA","MultiRoles","Root" };
 
     foreach (var role in roles)
     {

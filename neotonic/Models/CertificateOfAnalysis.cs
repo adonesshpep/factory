@@ -1,4 +1,7 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿// Models/CertificateOfAnalysis.cs  (CHANGED)
+// SampleId replaces SupplierSampleId. Result is NOT filled at create/update:
+// it is only set through PUT certificatesofanalysis/result/{id} (admin policy).
+using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -18,10 +21,10 @@ namespace neotonic.Models
         [Column("analysis_date")]
         public DateTime AnalysisDate { get; set; }
 
-        public int SupplierSampleId { get; set; }
+        public int SampleId { get; set; }
 
-        [ForeignKey(nameof(SupplierSampleId))]
-        public SupplierSample SupplierSample { get; set; } = null!;
+        [ForeignKey(nameof(SampleId))]
+        public Sample Sample { get; set; } = null!;
 
         [MaxLength(200)]
         [Column("physical_appearance")]
@@ -50,8 +53,9 @@ namespace neotonic.Models
         [Column("odor")]
         public string? Odor { get; set; }
 
+        // Pending until the admin result route sets it.
         [Column("result")]
-        public AnalysisResults Result { get; set; }
+        public AnalysisResults Result { get; set; } = AnalysisResults.Pending;
 
         [MaxLength(1000)]
         [Column("rejection_reason")]

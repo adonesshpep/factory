@@ -21,6 +21,13 @@ namespace neotonic.DTOs
         public string MaterialNameAr { get; set; } = string.Empty;
 
         public decimal Quantity { get; set; }
+
+        // Rollups (uncapped)
+        public decimal ContractedQuantity { get; set; }
+        public decimal OrderedQuantity { get; set; }
+        public decimal ContractedPercentage { get; set; }
+        public decimal OrderedPercentage { get; set; }
+
         public bool IsActive { get; set; }
     }
 }

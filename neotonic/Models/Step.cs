@@ -36,6 +36,10 @@ namespace neotonic.Models
 
         [Column("color")]
         public string? Color { get; set; } = "#FFFFFF";
+        public int? VirtualLocationId { get; set; }
+
+        [ForeignKey(nameof(VirtualLocationId))]
+        public Location? VirtualLocation { get; set; }
 
         public int StepTypeId { get; set; }
 

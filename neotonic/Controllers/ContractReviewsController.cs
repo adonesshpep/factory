@@ -19,34 +19,31 @@ namespace neotonic.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IAuditLogService _auditLogService;
+        private readonly INotificationService _notifications;
 
-        public ContractReviewsController(AppDbContext context, IAuditLogService auditLogService)
+        public ContractReviewsController(AppDbContext context, IAuditLogService auditLogService, INotificationService notification)
         {
             _context = context;
             _auditLogService = auditLogService;
+            _notifications = notification;
         }
 
+        [Authorize(Roles = "Admin, Sales")]
         [HttpPost("create")]
         public async Task<IActionResult> Create(CreateContractReviewDto dto)
         {
             var supplier = await _context.Suppliers.FindAsync(dto.SupplierId);
             if (supplier is null || !supplier.IsActive)
-            {
                 return BadRequest(new { message = "Supplier does not exist or is inactive" });
-            }
 
-            var material = await _context.Materials.FindAsync(dto.MaterialId);
-            if (material is null || !material.IsActive)
-            {
-                return BadRequest(new { message = "Material does not exist or is inactive" });
-            }
+            var rfq = await _context.RFQs.FindAsync(dto.RFQId);
+            if (rfq is null || !rfq.IsActive)
+                return BadRequest(new { message = "RFQ does not exist or is inactive" });
 
             var creationDate = dto.CreationDate ?? DateTime.UtcNow;
             var expectedDate = dto.ExpectedDate!.Value;
             if (expectedDate.Date < creationDate.Date)
-            {
                 return BadRequest(new { message = "Expected delivery date cannot be before the creation date" });
-            }
 
             var review = new ContractReview
             {
@@ -54,8 +51,8 @@ namespace neotonic.Controllers
                 CreationDate = creationDate,
                 ExpectedDate = expectedDate,
                 SupplierId = supplier.Id,
+                RFQId = rfq.Id,
                 ConnectionMethod = dto.ConnectionMethod ?? ConnectionMethods.Phone,
-                MaterialId = material.Id,
                 Quantity = dto.Quantity!.Value,
                 Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim()
             };
@@ -63,6 +60,13 @@ namespace neotonic.Controllers
             try
             {
                 _context.ContractReviews.Add(review);
+                await _context.SaveChangesAsync();
+
+                await _notifications.NotifyAsync(
+                    "Accounting",
+                    $"Contract review {review.Number} created; create a purchase order",
+                    NotificationRelatedTypes.ContractReviewCreated,
+                    relatedId: review.Id);
                 await _context.SaveChangesAsync();
             }
             catch (DbUpdateException ex) when (ex.InnerException is SqlException sqlEx && sqlEx.Number is 2601 or 2627)
@@ -73,35 +77,28 @@ namespace neotonic.Controllers
             await _auditLogService.LogAsync(
                 User,
                 "CreateContractReview",
-                $"Created contract review '{review.Number}' (Id: {review.Id}, Supplier: {supplier.SupplierNumber}, Material: {material.MaterialNumber})",
+                $"Created contract review '{review.Number}' (Id: {review.Id}, Supplier: {supplier.SupplierNumber}, RFQ: {rfq.Number})",
                 HttpContext.Connection.RemoteIpAddress?.ToString());
 
             return Ok(await ToResponseDto(review.Id));
         }
 
+        [Authorize(Roles = "Admin, Sales")]
         [HttpPut("update/{id}")]
         public async Task<IActionResult> Update(int id, UpdateContractReviewDto dto)
         {
             var review = await _context.ContractReviews.FindAsync(id);
             if (review is null)
-            {
                 return NotFound(new { message = "Contract review not found" });
-            }
 
             if (!string.IsNullOrWhiteSpace(dto.Number))
                 review.Number = dto.Number.Trim();
 
-            if (dto.CreationDate.HasValue)
-                review.CreationDate = dto.CreationDate.Value;
+            if (dto.CreationDate.HasValue) review.CreationDate = dto.CreationDate.Value;
+            if (dto.ExpectedDate.HasValue) review.ExpectedDate = dto.ExpectedDate.Value;
 
-            if (dto.ExpectedDate.HasValue)
-                review.ExpectedDate = dto.ExpectedDate.Value;
-
-            // Checked after applying both, so changing only one of the two dates is still validated
             if (review.ExpectedDate.Date < review.CreationDate.Date)
-            {
                 return BadRequest(new { message = "Expected delivery date cannot be before the creation date" });
-            }
 
             if (dto.SupplierId.HasValue)
             {
@@ -114,18 +111,16 @@ namespace neotonic.Controllers
             if (dto.ConnectionMethod.HasValue)
                 review.ConnectionMethod = dto.ConnectionMethod.Value;
 
-            if (dto.MaterialId.HasValue)
+            if (dto.RFQId.HasValue)
             {
-                var material = await _context.Materials.FindAsync(dto.MaterialId.Value);
-                if (material is null || !material.IsActive)
-                    return BadRequest(new { message = "Material does not exist or is inactive" });
-                review.MaterialId = material.Id;
+                var rfq = await _context.RFQs.FindAsync(dto.RFQId.Value);
+                if (rfq is null || !rfq.IsActive)
+                    return BadRequest(new { message = "RFQ does not exist or is inactive" });
+                review.RFQId = rfq.Id;
             }
 
-            if (dto.Quantity.HasValue)
-                review.Quantity = dto.Quantity.Value;
-            if(dto.Status.HasValue)
-                review.Status = dto.Status.Value;
+            if (dto.Quantity.HasValue) review.Quantity = dto.Quantity.Value;
+            if (dto.Status.HasValue) review.Status = dto.Status.Value;
 
             if (dto.Notes != null)
                 review.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
@@ -156,19 +151,14 @@ namespace neotonic.Controllers
 
             var query = _context.ContractReviews
                 .Include(c => c.Supplier)
-                .Include(c => c.Material)
+                .Include(c => c.RFQ).ThenInclude(r => r.Material)
                 .OrderByDescending(c => c.CreationDate)
                 .ThenByDescending(c => c.Id);
 
             var totalCount = await query.CountAsync();
-
-            var reviews = await query
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
+            var reviews = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
             var fulfilled = await _context.GetFulfilledQuantitiesAsync(reviews.Select(r => r.Id));
 
-            // Mapped in memory because the enum labels come from [Description]
             return Ok(new PagedResultDto<ContractReviewResponseDto>
             {
                 Items = reviews.Select(r => ToDto(r, fulfilled.GetValueOrDefault(r.Id))).ToList(),
@@ -177,16 +167,20 @@ namespace neotonic.Controllers
                 PageSize = pageSize
             });
         }
-
-        [Authorize(Roles = "Admin")]
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetOne(int id)
+        {
+            var cr = await _context.ContractReviews.FindAsync(id);
+            if (cr is null) return NotFound(new { message = "Contract Review not found" });
+            return Ok(await ToResponseDto(id));
+        }
+        [Authorize(Roles = "Admin, Technical, Manager")]
         [HttpPut("status/{id}")]
         public async Task<IActionResult> ChangeStatus(int id, ChangeStatusDto dto)
         {
             var review = await _context.ContractReviews.FindAsync(id);
             if (review is null)
-            {
                 return NotFound(new { message = "Contract review not found" });
-            }
 
             review.IsActive = dto.IsActive;
             await _context.SaveChangesAsync();
@@ -206,16 +200,11 @@ namespace neotonic.Controllers
         {
             var review = await _context.ContractReviews.FindAsync(id);
             if (review is null)
-            {
                 return NotFound(new { message = "Contract review not found" });
-            }
 
             _context.ContractReviews.Remove(review);
 
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
+            try { await _context.SaveChangesAsync(); }
             catch (DbUpdateException)
             {
                 var conflictPayload = await _context.GetDeleteConflictsAsync(review);
@@ -235,18 +224,19 @@ namespace neotonic.Controllers
         {
             var review = await _context.ContractReviews
                 .Include(c => c.Supplier)
-                .Include(c => c.Material)
+                .Include(c => c.RFQ).ThenInclude(r => r.Material)
                 .FirstAsync(c => c.Id == id);
 
             var fulfilled = await _context.GetFulfilledQuantitiesAsync(new[] { id });
             return ToDto(review, fulfilled.GetValueOrDefault(id));
         }
 
-
-        private static ContractReviewResponseDto ToDto(ContractReview c,decimal fulfilled)
+        private static ContractReviewResponseDto ToDto(ContractReview c, decimal fulfilled)
         {
             var (connectionAr, connectionEn) = c.ConnectionMethod.GetBilingualNames();
             var (statusAr, statusEn) = c.Status.GetBilingualNames();
+            var (rfqStatusAr, rfqStatusEn) = c.RFQ.Status.GetBilingualNames();
+            var m = c.RFQ.Material;
 
             return new ContractReviewResponseDto
             {
@@ -254,25 +244,43 @@ namespace neotonic.Controllers
                 Number = c.Number,
                 CreationDate = c.CreationDate,
                 ExpectedDate = c.ExpectedDate,
+
                 SupplierId = c.SupplierId,
                 SupplierNumber = c.Supplier.SupplierNumber,
                 SupplierNameEn = c.Supplier.NameEn,
                 SupplierNameAr = c.Supplier.NameAr,
+
                 ConnectionMethod = c.ConnectionMethod,
                 ConnectionMethodNameEn = connectionEn,
                 ConnectionMethodNameAr = connectionAr,
+
                 Status = c.Status,
                 StatusNameEn = statusEn,
                 StatusNameAr = statusAr,
-                MaterialId = c.MaterialId,
-                MaterialNumber = c.Material.MaterialNumber,
-                MaterialNameEn = c.Material.NameEn,
-                MaterialNameAr = c.Material.NameAr,
+
+                MaterialId = m.Id,
+                MaterialNumber = m.MaterialNumber,
+                MaterialNameEn = m.NameEn,
+                MaterialNameAr = m.NameAr,
+
+                RFQId = c.RFQId,
+                RFQNumber = c.RFQ.Number,
+                RFQStatus = c.RFQ.Status,
+                RFQStatusNameEn = rfqStatusEn,
+                RFQStatusNameAr = rfqStatusAr,
+                RFQQuantity = c.RFQ.Quantity,
+                // RFQ-level fulfilment totals are not computed here; leave as 0 until a dedicated helper exists.
+                RFQFulfilledQuantity = 0,
+                RFQRemainingQuantity = c.RFQ.Quantity,
+                RFQFulfillmentPercentage = 0,
+                RFQIsFulfilled = false,
+
                 Quantity = c.Quantity,
                 FulfilledQuantity = fulfilled,
                 RemainingQuantity = Math.Max(0, c.Quantity - fulfilled),
                 FulfillmentPercentage = ContractReviewFulfillment.Percentage(fulfilled, c.Quantity),
                 IsFulfilled = fulfilled >= c.Quantity,
+
                 Notes = c.Notes,
                 IsActive = c.IsActive
             };

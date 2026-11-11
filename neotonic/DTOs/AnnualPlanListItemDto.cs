@@ -1,5 +1,4 @@
-﻿// DTOs/AnnualPlanListItemDto.cs
-using neotonic.Models;
+﻿using neotonic.Models;
 
 public class AnnualPlanListItemDto
 {
@@ -15,4 +14,9 @@ public class AnnualPlanListItemDto
     public string AnnualPlanStatusNameAr { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public int DetailCount { get; set; }
+
+    // Rollup percentages (plan level; average of per-line %, each line capped at 100)
+    public decimal RequestedPercentage { get; set; }
+    public decimal ContractedPercentage { get; set; }
+    public decimal OrderedPercentage { get; set; }
 }

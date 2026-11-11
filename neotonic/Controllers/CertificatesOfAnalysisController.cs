@@ -17,46 +17,43 @@ namespace neotonic.Controllers
     [Authorize(Policy = "ActiveUser")]
     public class CertificatesOfAnalysisController : ControllerBase
     {
-        private const string DateBeforeDeliveryMessage =
-            "Analysis date cannot be before the sample's delivery date";
-
         private readonly AppDbContext _context;
         private readonly IAuditLogService _auditLogService;
+        private readonly INotificationService _notifications;
 
-        public CertificatesOfAnalysisController(AppDbContext context, IAuditLogService auditLogService)
+        public CertificatesOfAnalysisController(AppDbContext context, IAuditLogService auditLogService, INotificationService notifications)
         {
             _context = context;
             _auditLogService = auditLogService;
+            _notifications = notifications;
         }
 
+        // ---------------------------------------------------------------
+        // create / update (never touch Result)
+        // ---------------------------------------------------------------
+
+        [Authorize(Roles = "Admin, Lab")]
         [HttpPost("create")]
         public async Task<IActionResult> Create(CreateCertificateOfAnalysisDto dto)
         {
-            var sample = await _context.SupplierSamples.FindAsync(dto.SupplierSampleId);
+            var sample = await _context.Samples
+                .Include(s => s.ContractReview).ThenInclude(cr => cr!.RFQ).ThenInclude(r => r.Material)
+                .Include(s => s.ContractReview).ThenInclude(cr => cr!.Supplier)
+                .Include(s => s.Uom).ThenInclude(u => u!.Material)
+                .FirstOrDefaultAsync(s => s.Id == dto.SampleId);
+
             if (sample is null || !sample.IsActive)
-            {
-                return BadRequest(new { message = "Supplier sample does not exist or is inactive" });
-            }
+                return BadRequest(new { message = "Sample does not exist or is inactive" });
 
             var analysisDate = dto.AnalysisDate!.Value;
-            if (analysisDate.Date < sample.DeliveryDate.Date)
-            {
-                return BadRequest(new { message = DateBeforeDeliveryMessage });
-            }
-
-            var result = dto.Result!.Value;
-            var reason = Normalize(dto.RejectionReason);
-            var resultError = ValidateResult(result, reason);
-            if (resultError is not null)
-            {
-                return BadRequest(new { message = resultError });
-            }
+            if (analysisDate.Date < sample.SampleDate.Date)
+                return BadRequest(new { message = "Analysis date cannot be before the sample date" });
 
             var certificate = new CertificateOfAnalysis
             {
                 Number = dto.Number.Trim(),
                 AnalysisDate = analysisDate,
-                SupplierSampleId = sample.Id,
+                SampleId = sample.Id,
                 PhysicalAppearance = Normalize(dto.PhysicalAppearance),
                 MoisturePercentage = dto.MoisturePercentage,
                 BacterialTest = Normalize(dto.BacterialTest),
@@ -64,38 +61,53 @@ namespace neotonic.Controllers
                 MicroscopicAppearance = Normalize(dto.MicroscopicAppearance),
                 Color = Normalize(dto.Color),
                 Odor = Normalize(dto.Odor),
-                Result = result,
-                RejectionReason = reason,
+                Result = AnalysisResults.Pending,
+                RejectionReason = null,
                 Notes = Normalize(dto.Notes)
             };
 
+            await using var tx = await _context.Database.BeginTransactionAsync();
             try
             {
                 _context.CertificatesOfAnalysis.Add(certificate);
                 await _context.SaveChangesAsync();
+
+                await _notifications.NotifyAsync(
+                    "Admin",
+                    $"Certificate {certificate.Number} for sample {sample.Number} is pending a result",
+                    NotificationRelatedTypes.CertificatePendingResult,
+                    relatedId: certificate.Id);
+
+                await _context.SaveChangesAsync();
+                await tx.CommitAsync();
             }
             catch (DbUpdateException ex) when (ex.InnerException is SqlException sqlEx && sqlEx.Number is 2601 or 2627)
             {
+                await tx.RollbackAsync();
                 return Conflict(new { message = "A certificate of analysis with this number already exists" });
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                throw;
             }
 
             await _auditLogService.LogAsync(
                 User,
                 "CreateCertificateOfAnalysis",
-                $"Created certificate of analysis '{certificate.Number}' (Id: {certificate.Id}, Sample: {sample.Number}, Result: {certificate.Result})",
+                $"Created certificate of analysis '{certificate.Number}' (Id: {certificate.Id}, Sample: {sample.Number}, SampleType: {sample.SampleType}, Result: Pending)",
                 HttpContext.Connection.RemoteIpAddress?.ToString());
 
             return Ok(await ToResponseDto(certificate.Id));
         }
 
+        [Authorize(Roles = "Admin, Lab")]
         [HttpPut("update/{id}")]
         public async Task<IActionResult> Update(int id, UpdateCertificateOfAnalysisDto dto)
         {
             var certificate = await _context.CertificatesOfAnalysis.FindAsync(id);
             if (certificate is null)
-            {
                 return NotFound(new { message = "Certificate of analysis not found" });
-            }
 
             if (!string.IsNullOrWhiteSpace(dto.Number))
                 certificate.Number = dto.Number.Trim();
@@ -103,64 +115,29 @@ namespace neotonic.Controllers
             if (dto.AnalysisDate.HasValue)
                 certificate.AnalysisDate = dto.AnalysisDate.Value;
 
-            if (dto.SupplierSampleId.HasValue)
+            if (dto.SampleId.HasValue)
             {
-                var newSample = await _context.SupplierSamples.FindAsync(dto.SupplierSampleId.Value);
+                var newSample = await _context.Samples.FindAsync(dto.SampleId.Value);
                 if (newSample is null || !newSample.IsActive)
-                    return BadRequest(new { message = "Supplier sample does not exist or is inactive" });
-                certificate.SupplierSampleId = newSample.Id;
+                    return BadRequest(new { message = "Sample does not exist or is inactive" });
+                certificate.SampleId = newSample.Id;
             }
 
-            // If either the date or the sample changed, re-check the date against the final sample
-            if (dto.AnalysisDate.HasValue || dto.SupplierSampleId.HasValue)
+            if (dto.AnalysisDate.HasValue || dto.SampleId.HasValue)
             {
-                var sample = await _context.SupplierSamples.FindAsync(certificate.SupplierSampleId);
-                if (certificate.AnalysisDate.Date < sample!.DeliveryDate.Date)
-                    return BadRequest(new { message = DateBeforeDeliveryMessage });
+                var sample = await _context.Samples.FindAsync(certificate.SampleId);
+                if (certificate.AnalysisDate.Date < sample!.SampleDate.Date)
+                    return BadRequest(new { message = "Analysis date cannot be before the sample date" });
             }
 
-            if (dto.PhysicalAppearance != null)
-                certificate.PhysicalAppearance = Normalize(dto.PhysicalAppearance);
-
-            if (dto.MoisturePercentage.HasValue)
-                certificate.MoisturePercentage = dto.MoisturePercentage.Value;
-
-            if (dto.BacterialTest != null)
-                certificate.BacterialTest = Normalize(dto.BacterialTest);
-
-            if (dto.FungalTest != null)
-                certificate.FungalTest = Normalize(dto.FungalTest);
-
-            if (dto.MicroscopicAppearance != null)
-                certificate.MicroscopicAppearance = Normalize(dto.MicroscopicAppearance);
-
-            if (dto.Color != null)
-                certificate.Color = Normalize(dto.Color);
-
-            if (dto.Odor != null)
-                certificate.Odor = Normalize(dto.Odor);
-
-            if (dto.Notes != null)
-                certificate.Notes = Normalize(dto.Notes);
-
-            // Result + rejection reason are validated together on the final values
-            if (dto.Result.HasValue)
-            {
-                certificate.Result = dto.Result.Value;
-
-                // Switching to Accepted without sending a reason clears the old reason
-                if (certificate.Result == AnalysisResults.Accepted && dto.RejectionReason is null)
-                    certificate.RejectionReason = null;
-            }
-
-            if (dto.RejectionReason != null)
-                certificate.RejectionReason = Normalize(dto.RejectionReason);
-
-            var resultError = ValidateResult(certificate.Result, certificate.RejectionReason);
-            if (resultError is not null)
-            {
-                return BadRequest(new { message = resultError });
-            }
+            if (dto.PhysicalAppearance != null) certificate.PhysicalAppearance = Normalize(dto.PhysicalAppearance);
+            if (dto.MoisturePercentage.HasValue) certificate.MoisturePercentage = dto.MoisturePercentage.Value;
+            if (dto.BacterialTest != null) certificate.BacterialTest = Normalize(dto.BacterialTest);
+            if (dto.FungalTest != null) certificate.FungalTest = Normalize(dto.FungalTest);
+            if (dto.MicroscopicAppearance != null) certificate.MicroscopicAppearance = Normalize(dto.MicroscopicAppearance);
+            if (dto.Color != null) certificate.Color = Normalize(dto.Color);
+            if (dto.Odor != null) certificate.Odor = Normalize(dto.Odor);
+            if (dto.Notes != null) certificate.Notes = Normalize(dto.Notes);
 
             try
             {
@@ -174,17 +151,203 @@ namespace neotonic.Controllers
             await _auditLogService.LogAsync(
                 User,
                 "UpdateCertificateOfAnalysis",
-                $"Updated certificate of analysis (Id: {certificate.Id}, Number: {certificate.Number}, Result: {certificate.Result})",
+                $"Updated certificate of analysis (Id: {certificate.Id}, Number: {certificate.Number})",
                 HttpContext.Connection.RemoteIpAddress?.ToString());
 
             return Ok(await ToResponseDto(certificate.Id));
         }
 
+        // ---------------------------------------------------------------
+        // result route
+        // ---------------------------------------------------------------
+
+        // TODO(role): tighten to a named "SetCertificateResult" policy when a QA role exists.
+        [Authorize(Roles = "Admin, Quality Manager")]
+        [HttpPut("result/{id}")]
+        public async Task<IActionResult> SetResult(int id, SetCertificateResultDto dto)
+        {
+            var result = dto.Result!.Value;
+            var reason = Normalize(dto.RejectionReason);
+
+            var resultError = ValidateResultInput(result, reason);
+            if (resultError is not null)
+                return BadRequest(new { message = resultError });
+
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                // Lock the certificate row.
+                var certificate = await _context.CertificatesOfAnalysis
+                    .FromSqlRaw("SELECT * FROM certificates_of_analysis WITH (UPDLOCK) WHERE Id = {0}", id)
+                    .Include(c => c.Sample)
+                    .FirstOrDefaultAsync();
+
+                if (certificate is null)
+                {
+                    await tx.RollbackAsync();
+                    return NotFound(new { message = "Certificate of analysis not found" });
+                }
+
+                var sample = certificate.Sample;
+
+                bool boxMoved = false;
+                int? newLocationId = null;
+                string? fromCode = null;
+                string? toCode = null;
+
+                if (sample.SampleType == SampleTypes.Delivery)
+                {
+                    if (sample.UomId is null)
+                    {
+                        await tx.RollbackAsync();
+                        return BadRequest(new { message = "Delivery sample is not linked to a box" });
+                    }
+
+                    // Lock the box.
+                    var box = await _context.UOMs
+                        .FromSqlRaw("SELECT * FROM uoms WITH (UPDLOCK) WHERE Id = {0}", sample.UomId.Value)
+                        .Include(u => u.Location)
+                        .FirstOrDefaultAsync();
+
+                    if (box is null)
+                    {
+                        await tx.RollbackAsync();
+                        return BadRequest(new { message = "Box for this sample no longer exists" });
+                    }
+
+                    // Reservation guard: any Done transfer line referencing this box blocks the change.
+                    var hasDoneReservation = await _context.TransferOrderLines
+                        .AnyAsync(l => l.UomId == box.Id && l.TransferOrder.Status == TransferOrderStatuses.Done);
+                    if (hasDoneReservation)
+                    {
+                        await tx.RollbackAsync();
+                        return Conflict(new { message = "Box is reserved on a Done transfer order; change the result after it is executed or cancelled" });
+                    }
+
+                    // Current-zone guard.
+
+                    //reeeeeeeeeeeeeecheeeeeeeck this thing
+                    if (box.Location.Kind != LocationKinds.Inventory || box.Location.Zone is null)
+                    {
+                        await tx.RollbackAsync();
+                        return Conflict(new { message = "Box is not in a real inventory zone; cannot apply certificate result" });
+                    }
+
+                    var invId = box.Location.InventoryId!.Value;
+                    var targetZone = result == AnalysisResults.Accepted
+                        ? InventoryZones.Accepted
+                        : InventoryZones.Rejected;
+
+                    var targetLocation = await _context.Locations
+                        .FirstOrDefaultAsync(l => l.InventoryId == invId && l.Zone == targetZone);
+
+                    if (targetLocation is null)
+                    {
+                        await tx.RollbackAsync();
+                        return Conflict(new { message = "Target zone is missing from the inventory" });
+                    }
+
+                    if (box.LocationId == targetLocation.Id && box.ShelfId is null)
+                    {
+                        // Already in the target zone with no shelf: only the result changes.
+                    }
+                    else
+                    {
+                        var fromLocation = box.Location;
+                        var fromShelfId = box.ShelfId;
+
+                        box.LocationId = targetLocation.Id;
+                        box.ShelfId = null;
+
+                        _context.StockMoves.Add(new StockMove
+                        {
+                            UomId = box.Id,
+                            FromLocationId = fromLocation.Id,
+                            ToLocationId = targetLocation.Id,
+                            FromShelfId = fromShelfId,
+                            ToShelfId = null,
+                            Quantity = box.Quantity,
+                            MoveType = StockMoveTypes.Move,
+                            SourceType = StockMoveSources.CertificateOfAnalysis,
+                            SourceId = certificate.Id,
+                            Reason = "a certificate result was set",
+                            MoveDate = DateTime.UtcNow,
+                            UserId = CurrentUserId()
+                        });
+
+                        boxMoved = true;
+                        newLocationId = targetLocation.Id;
+                        fromCode = fromLocation.Code;
+                        toCode = targetLocation.Code;
+                    }
+                }
+
+                certificate.Result = result;
+                certificate.RejectionReason = reason;
+                if (sample.SampleType == SampleTypes.Delivery && boxMoved)
+                {
+                    await _notifications.NotifyAsync(
+                        "Warehouse",
+                        $"Box {sample.Uom!.Barcode} moved to a new zone; put it away",
+                        NotificationRelatedTypes.BoxNeedsPutAway,
+                        relatedId: sample.UomId);
+                }
+
+                if (result == AnalysisResults.Rejected)
+                {
+                    await _notifications.NotifyAsync(
+                        "Admin",
+                        $"Certificate {certificate.Number} is Rejected; decide on the box",
+                        NotificationRelatedTypes.CertificateRejected,
+                        relatedId: certificate.Id);
+                }
+
+                // Latest active certificate on the sample wins.
+                var siblings = await _context.CertificatesOfAnalysis
+                    .Where(c => c.SampleId == sample.Id && c.Id != certificate.Id && c.IsActive)
+                    .ToListAsync();
+                foreach (var s in siblings)
+                    s.IsActive = false;
+
+                await _context.SaveChangesAsync();
+                await tx.CommitAsync();
+
+                var moveNote = boxMoved
+                    ? $"; box moved: Yes (from {fromCode} to {toCode})"
+                    : "; box moved: No";
+
+                await _auditLogService.LogAsync(
+                    User,
+                    "SetCertificateResult",
+                    $"Set result {result} on certificate {certificate.Number} (Id: {certificate.Id}, Sample: {sample.Number}, SampleType: {sample.SampleType}){moveNote}",
+                    HttpContext.Connection.RemoteIpAddress?.ToString());
+
+                var response = await ToResponseDto(certificate.Id);
+                response.BoxMoved = boxMoved;
+                response.BoxNewLocationId = newLocationId;
+                return Ok(response);
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is SqlException sqlEx && sqlEx.Number is 2601 or 2627)
+            {
+                await tx.RollbackAsync();
+                return Conflict(new { message = "A certificate of analysis with this number already exists" });
+            }
+            catch
+            {
+                await tx.RollbackAsync();
+                return StatusCode(500, new { message = "An unexpected error occurred while setting the certificate result" });
+            }
+        }
+
+        // ---------------------------------------------------------------
+        // read / status / delete
+        // ---------------------------------------------------------------
+
         [HttpGet("index")]
         public async Task<IActionResult> Index(
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20,
-            [FromQuery] int? supplierSampleId = null,
+            [FromQuery] int? sampleId = null,
             [FromQuery] AnalysisResults? result = null,
             [FromQuery] int? contractReviewId = null)
         {
@@ -193,13 +356,14 @@ namespace neotonic.Controllers
 
             var query = QueryWithIncludes();
 
-            if (supplierSampleId.HasValue)
-                query = query.Where(c => c.SupplierSampleId == supplierSampleId.Value);
+            if (sampleId.HasValue)
+                query = query.Where(c => c.SampleId == sampleId.Value);
 
             if (result.HasValue)
                 query = query.Where(c => c.Result == result.Value);
+
             if (contractReviewId.HasValue)
-                query = query.Where(c => c.SupplierSample.ContractReviewId == contractReviewId.Value);
+                query = query.Where(c => c.Sample.ContractReviewId == contractReviewId.Value);
 
             var ordered = query
                 .OrderByDescending(c => c.AnalysisDate)
@@ -220,16 +384,20 @@ namespace neotonic.Controllers
                 PageSize = pageSize
             });
         }
-
-        [Authorize(Roles = "Admin")]
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetOne(int id)
+        {
+            var coa = await _context.CertificatesOfAnalysis.FindAsync(id);
+            if (coa is null) return NotFound(new { message = "Certificate of Analysis not found" });
+            return Ok(await ToResponseDto(id));
+        }
+        [Authorize(Roles = "Admin, Technical, Manager")]
         [HttpPut("status/{id}")]
         public async Task<IActionResult> ChangeStatus(int id, ChangeStatusDto dto)
         {
             var certificate = await _context.CertificatesOfAnalysis.FindAsync(id);
             if (certificate is null)
-            {
                 return NotFound(new { message = "Certificate of analysis not found" });
-            }
 
             certificate.IsActive = dto.IsActive;
             await _context.SaveChangesAsync();
@@ -249,9 +417,7 @@ namespace neotonic.Controllers
         {
             var certificate = await _context.CertificatesOfAnalysis.FindAsync(id);
             if (certificate is null)
-            {
                 return NotFound(new { message = "Certificate of analysis not found" });
-            }
 
             _context.CertificatesOfAnalysis.Remove(certificate);
 
@@ -274,14 +440,20 @@ namespace neotonic.Controllers
             return Ok(new { message = "Certificate of analysis deleted successfully" });
         }
 
-        // ---- helpers ----
+        // ---------------------------------------------------------------
+        // helpers
+        // ---------------------------------------------------------------
+
+        private string CurrentUserId() =>
+            User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value ?? "unknown";
 
         private static string? Normalize(string? value) =>
             string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-        // Rejected needs a reason; Accepted must not have one.
-        private static string? ValidateResult(AnalysisResults result, string? reason) => result switch
+        private static string? ValidateResultInput(AnalysisResults result, string? reason) => result switch
         {
+            AnalysisResults.Pending =>
+                "Result must be Accepted or Rejected; Pending cannot be set via this endpoint",
             AnalysisResults.Rejected when reason is null =>
                 "Rejection reason is required when the result is Rejected",
             AnalysisResults.Accepted when reason is not null =>
@@ -292,8 +464,9 @@ namespace neotonic.Controllers
 
         private IQueryable<CertificateOfAnalysis> QueryWithIncludes() =>
             _context.CertificatesOfAnalysis
-                .Include(c => c.SupplierSample).ThenInclude(s => s.ContractReview).ThenInclude(r => r.Supplier)
-                .Include(c => c.SupplierSample).ThenInclude(s => s.ContractReview).ThenInclude(r => r.Material);
+                .Include(c => c.Sample).ThenInclude(s => s.ContractReview!).ThenInclude(cr => cr.Supplier)
+                .Include(c => c.Sample).ThenInclude(s => s.ContractReview!).ThenInclude(cr => cr.RFQ).ThenInclude(r => r.Material)
+                .Include(c => c.Sample).ThenInclude(s => s.Uom!).ThenInclude(u => u.Material);
 
         private async Task<CertificateOfAnalysisResponseDto> ToResponseDto(int id)
         {
@@ -303,10 +476,34 @@ namespace neotonic.Controllers
 
         private static CertificateOfAnalysisResponseDto ToDto(CertificateOfAnalysis c)
         {
-            var sample = c.SupplierSample;
-            var review = sample.ContractReview;
+            var sample = c.Sample;
             var (resultAr, resultEn) = c.Result.GetBilingualNames();
-            var (reviewStatusAr, reviewStatusEn) = review.Status.GetBilingualNames();
+
+            // Material / supplier / CR come from different places depending on sample type.
+            string materialNumber, materialEn, materialAr;
+            int materialId;
+            Supplier? supplier = null;
+            ContractReview? review = null;
+
+            if (sample.SampleType == SampleTypes.Supplier)
+            {
+                review = sample.ContractReview!;
+                supplier = review.Supplier;
+                var m = review.RFQ.Material;
+                materialId = m.Id; materialNumber = m.MaterialNumber; materialEn = m.NameEn; materialAr = m.NameAr;
+            }
+            else
+            {
+                var m = sample.Uom!.Material!;
+                materialId = m.Id; materialNumber = m.MaterialNumber; materialEn = m.NameEn; materialAr = m.NameAr;
+            }
+
+            string? reviewStatusEn = null, reviewStatusAr = null;
+            if (review is not null)
+            {
+                var (ar, en) = review.Status.GetBilingualNames();
+                reviewStatusAr = ar; reviewStatusEn = en;
+            }
 
             return new CertificateOfAnalysisResponseDto
             {
@@ -314,28 +511,32 @@ namespace neotonic.Controllers
                 Number = c.Number,
                 AnalysisDate = c.AnalysisDate,
 
-                SupplierSampleId = c.SupplierSampleId,
-                SupplierSampleNumber = sample.Number,
-                SampleDeliveryDate = sample.DeliveryDate,
+                SampleId = c.SampleId,
+                SampleNumber = sample.Number,
+                SampleType = sample.SampleType,
+                SampleDate = sample.SampleDate,
 
-                SupplierId = review.SupplierId,
-                SupplierNumber = review.Supplier.SupplierNumber,
-                SupplierNameEn = review.Supplier.NameEn,
-                SupplierNameAr = review.Supplier.NameAr,
+                SupplierId = supplier?.Id,
+                SupplierNumber = supplier?.SupplierNumber,
+                SupplierNameEn = supplier?.NameEn,
+                SupplierNameAr = supplier?.NameAr,
 
-                ContractReviewId = review.Id,
-                ContractReviewNumber = review.Number,
-                ContractReviewCreationDate = review.CreationDate,
-                ContractReviewExpectedDate = review.ExpectedDate,
-                ContractReviewQuantity = review.Quantity,
-                ContractReviewStatus = review.Status,
+                ContractReviewId = review?.Id,
+                ContractReviewNumber = review?.Number,
+                ContractReviewCreationDate = review?.CreationDate,
+                ContractReviewExpectedDate = review?.ExpectedDate,
+                ContractReviewQuantity = review?.Quantity,
+                ContractReviewStatus = review?.Status,
                 ContractReviewStatusNameEn = reviewStatusEn,
                 ContractReviewStatusNameAr = reviewStatusAr,
 
-                MaterialId = review.MaterialId,
-                MaterialNumber = review.Material.MaterialNumber,
-                MaterialNameEn = review.Material.NameEn,
-                MaterialNameAr = review.Material.NameAr,
+                MaterialId = materialId,
+                MaterialNumber = materialNumber,
+                MaterialNameEn = materialEn,
+                MaterialNameAr = materialAr,
+
+                UomId = sample.UomId,
+                UomBarcode = sample.Uom?.Barcode,
 
                 PhysicalAppearance = c.PhysicalAppearance,
                 MoisturePercentage = c.MoisturePercentage,
@@ -351,7 +552,10 @@ namespace neotonic.Controllers
                 RejectionReason = c.RejectionReason,
 
                 Notes = c.Notes,
-                IsActive = c.IsActive
+                IsActive = c.IsActive,
+
+                BoxMoved = null,
+                BoxNewLocationId = null
             };
         }
     }

@@ -25,6 +25,7 @@ namespace neotonic.Controllers
             _auditLogService = auditLogService;
         }
 
+        [Authorize(Roles = "Admin, Maintenance")]
         [HttpPost("create")]
         public async Task<IActionResult> Create(CreateScaleEqualizationDto dto)
         {
@@ -68,6 +69,7 @@ namespace neotonic.Controllers
             return Ok(await ToResponseDto(equalization));
         }
 
+        [Authorize(Roles = "Admin, Maintenance")]
         [HttpPut("update/{id}")]
         public async Task<IActionResult> Update(int id, UpdateScaleEqualizationDto dto)
         {

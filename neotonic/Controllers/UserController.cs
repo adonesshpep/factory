@@ -75,6 +75,42 @@ namespace neotonic.Controllers
 
             return Ok(new { message = "User created successfully", userId = user.Id });
         }
+        [Authorize(Roles = "Admin")]
+        [HttpGet("index")]
+        public async Task<IActionResult> Index([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        {
+            if (page < 1) page = 1;
+            if (pageSize < 1 || pageSize > 100) pageSize = 20;
+
+            var query = _userManager.Users.OrderBy(u => u.Id);
+
+            var totalCount = await query.CountAsync();
+            var users = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+
+            var items = new List<object>();
+            foreach (var u in users)
+            {
+                var roles = await _userManager.GetRolesAsync(u);
+                items.Add(new
+                {
+                    id = u.Id,
+                    userName = u.UserName,
+                    fullName = u.FullName,
+                    email = u.Email,
+                    isActive = u.IsActive,
+                    roles = roles
+                });
+            }
+
+            return Ok(new
+            {
+                items,
+                totalCount,
+                page,
+                pageSize,
+                totalPages = (int)Math.Ceiling(totalCount / (double)pageSize)
+            });
+        }
         [Authorize(Roles ="Admin")]
         [HttpDelete("deleteuser/{userid:guid}")]
         public async Task<IActionResult> DeleteUser(string userId)

@@ -13,6 +13,10 @@
         public int StepTypeId { get; set; }
         public string StepTypeNameEn { get; set; } = string.Empty;
         public string StepTypeNameAr { get; set; } = string.Empty;
+        public int? VirtualLocationId { get; set; }
+        public string? VirtualLocationCode { get; set; }
+        public string? VirtualLocationNameEn { get; set; }
+        public string? VirtualLocationNameAr { get; set; }
         public string Color { get; set; } = "#FFFFFF";
         public bool IsActive { get; set; }
     }

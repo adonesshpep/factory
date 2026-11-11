@@ -1,9 +1,5 @@
-﻿// Models/MemoRWDetail.cs
-// Barcode is sent by the client (scanned from the physical label) and must be
-// globally unique — the unique index enforces it at the DB level, and the
-// controller maps the SqlException to a friendly Conflict message.
-// No invariant between AWeight and BWeight: A is taken after removing the box,
-// B is before, so A < B is the normal case but it is not enforced.
+﻿// Models/MemoRWDetail.cs  (CHANGED)
+// One received box. UomId + Tear only; B weight = UOM.Quantity + Tear, never stored.
 using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -11,7 +7,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace neotonic.Models
 {
     [Table("memo_rw_details")]
-    [Index(nameof(Barcode), IsUnique = true, Name = "ix_memo_rw_details_barcode")]
+    [Index(nameof(UomId), IsUnique = true, Name = "ix_memo_rw_details_uom")]
     public class MemoRWDetail
     {
         [Key]
@@ -22,16 +18,12 @@ namespace neotonic.Models
         [ForeignKey(nameof(MemoId))]
         public MemoRWIn Memo { get; set; } = null!;
 
-        [Required]
-        [Column("barcode")]
-        public long Barcode { get; set; }
+        public int UomId { get; set; }
 
-        [Required]
-        [Column("aweight", TypeName = "decimal(18,3)")]
-        public decimal AWeight { get; set; }
+        [ForeignKey(nameof(UomId))]
+        public UOM Uom { get; set; } = null!;
 
-        [Required]
-        [Column("bweight", TypeName = "decimal(18,3)")]
-        public decimal BWeight { get; set; }
+        [Column("tear", TypeName = "decimal(18,3)")]
+        public decimal Tear { get; set; }
     }
 }

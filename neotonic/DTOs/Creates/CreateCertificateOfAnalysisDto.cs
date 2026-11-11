@@ -1,6 +1,4 @@
-﻿// DTOs/CreateCertificateOfAnalysisDto.cs
-using neotonic.Models;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace neotonic.DTOs.Creates
 {
@@ -13,7 +11,8 @@ namespace neotonic.DTOs.Creates
         public DateTime? AnalysisDate { get; set; }
 
         [Required, Range(1, int.MaxValue)]
-        public int SupplierSampleId { get; set; }
+        public int SampleId { get; set; }
+
         [MaxLength(200)] public string? PhysicalAppearance { get; set; }
 
         [Range(typeof(decimal), "0", "100")]
@@ -25,11 +24,6 @@ namespace neotonic.DTOs.Creates
         [MaxLength(200)] public string? Color { get; set; }
         [MaxLength(200)] public string? Odor { get; set; }
 
-
-        [Required, EnumDataType(typeof(AnalysisResults))]
-        public AnalysisResults? Result { get; set; }
-
-        [MaxLength(1000)] public string? RejectionReason { get; set; }
         [MaxLength(1000)] public string? Notes { get; set; }
     }
 }

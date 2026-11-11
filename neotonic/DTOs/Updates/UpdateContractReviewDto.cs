@@ -12,7 +12,7 @@ namespace neotonic.DTOs.Updates
         [Range(1, int.MaxValue)] public int? SupplierId { get; set; }
         [EnumDataType(typeof(ConnectionMethods))] public ConnectionMethods? ConnectionMethod { get; set; }
         [Range(1, int.MaxValue)] public int? RFQId { get; set; }
-        [Range(1, int.MaxValue)] public int? MaterialId { get; set; }
+
 
         [Range(typeof(decimal), "0.001", "999999999999999")]
         public decimal? Quantity { get; set; }

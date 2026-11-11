@@ -26,6 +26,7 @@ namespace neotonic.Controllers
             _auditLogService = auditLogService;
         }
 
+        [Authorize(Roles = "Admin, Maintenance, Warehouse")]
         [HttpPost("create")]
         public async Task<IActionResult> Create(CreateCleaningRequestDto dto)
         {
@@ -74,6 +75,7 @@ namespace neotonic.Controllers
             return Ok(await ToResponseDto(request.Id));
         }
 
+        [Authorize(Roles = "Admin, Maintenance, Warehouse")]
         [HttpPut("update/{id}")]
         public async Task<IActionResult> Update(int id, UpdateCleaningRequestDto dto)
         {
@@ -161,7 +163,7 @@ namespace neotonic.Controllers
             });
         }
 
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin, Technical, Manager")]
         [HttpPut("status/{id}")]
         public async Task<IActionResult> ChangeStatus(int id, ChangeStatusDto dto)
         {

@@ -28,12 +28,12 @@ namespace neotonic.Controllers
             _auditLogService = auditLogService;
         }
 
+        [Authorize(Roles = "Admin, Sales")]
         [HttpPost("create")]
         public async Task<IActionResult> Create(CreatePurchaseOrderDto dto)
         {
             var linkError = await ValidateLinksAsync(dto.ContractReviewId, dto.CertificateOfAnalysisId);
-            if (linkError is not null)
-                return BadRequest(new { message = linkError });
+            if (linkError is not null) return BadRequest(new { message = linkError });
 
             var creationDate = dto.CreationDate ?? DateTime.UtcNow;
             var deliveryDate = dto.DeliveryDate!.Value;
@@ -41,8 +41,7 @@ namespace neotonic.Controllers
                 return BadRequest(new { message = DateMessage });
 
             var fulfillmentError = await CheckFulfillmentAsync(dto.ContractReviewId, dto.Quantity!.Value);
-            if (fulfillmentError is not null)
-                return BadRequest(new { message = fulfillmentError });
+            if (fulfillmentError is not null) return BadRequest(new { message = fulfillmentError });
 
             var order = new PurchaseOrder
             {
@@ -74,52 +73,34 @@ namespace neotonic.Controllers
             return Ok(await ToResponseDto(order.Id));
         }
 
+        [Authorize(Roles = "Admin, Sales")]
         [HttpPut("update/{id}")]
         public async Task<IActionResult> Update(int id, UpdatePurchaseOrderDto dto)
         {
             var order = await _context.PurchaseOrders.FindAsync(id);
-            if (order is null)
-                return NotFound(new { message = "Purchase order not found" });
+            if (order is null) return NotFound(new { message = "Purchase order not found" });
 
             var oldStatus = order.Status;
 
-            if (!string.IsNullOrWhiteSpace(dto.Number))
-                order.Number = dto.Number.Trim();
-
-            if (dto.CreationDate.HasValue)
-                order.CreationDate = dto.CreationDate.Value;
-
-            if (dto.DeliveryDate.HasValue)
-                order.DeliveryDate = dto.DeliveryDate.Value;
-
-            if (dto.ContractReviewId.HasValue)
-                order.ContractReviewId = dto.ContractReviewId.Value;
-
-            if (dto.CertificateOfAnalysisId.HasValue)
-                order.CertificateOfAnalysisId = dto.CertificateOfAnalysisId.Value;
-
-            if (dto.Quantity.HasValue)
-                order.Quantity = dto.Quantity.Value;
-
-            if (dto.Status.HasValue)
-                order.Status = dto.Status.Value;
-
+            if (!string.IsNullOrWhiteSpace(dto.Number)) order.Number = dto.Number.Trim();
+            if (dto.CreationDate.HasValue) order.CreationDate = dto.CreationDate.Value;
+            if (dto.DeliveryDate.HasValue) order.DeliveryDate = dto.DeliveryDate.Value;
+            if (dto.ContractReviewId.HasValue) order.ContractReviewId = dto.ContractReviewId.Value;
+            if (dto.CertificateOfAnalysisId.HasValue) order.CertificateOfAnalysisId = dto.CertificateOfAnalysisId.Value;
+            if (dto.Quantity.HasValue) order.Quantity = dto.Quantity.Value;
+            if (dto.Status.HasValue) order.Status = dto.Status.Value;
             if (dto.Notes != null)
                 order.Notes = string.IsNullOrWhiteSpace(dto.Notes) ? null : dto.Notes.Trim();
 
-            // Everything below validates the FINAL values, so partial updates are still checked
             if (order.DeliveryDate.Date <= order.CreationDate.Date)
                 return BadRequest(new { message = DateMessage });
 
             if (dto.ContractReviewId.HasValue || dto.CertificateOfAnalysisId.HasValue)
             {
                 var linkError = await ValidateLinksAsync(order.ContractReviewId, order.CertificateOfAnalysisId);
-                if (linkError is not null)
-                    return BadRequest(new { message = linkError });
+                if (linkError is not null) return BadRequest(new { message = linkError });
             }
 
-            // A cancelled PO doesn't count toward the contract review, so only check when this PO counts.
-            // Moving out of Cancelled makes it count again, so that case is checked too.
             var countsTowardReview = order.Status != POStatus.Cancelled;
             var comingBackFromCancelled = oldStatus == POStatus.Cancelled && countsTowardReview;
 
@@ -127,22 +108,19 @@ namespace neotonic.Controllers
                 (dto.Quantity.HasValue || dto.ContractReviewId.HasValue || comingBackFromCancelled))
             {
                 var fulfillmentError = await CheckFulfillmentAsync(order.ContractReviewId, order.Quantity, order.Id);
-                if (fulfillmentError is not null)
-                    return BadRequest(new { message = fulfillmentError });
+                if (fulfillmentError is not null) return BadRequest(new { message = fulfillmentError });
             }
 
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
+            try { await _context.SaveChangesAsync(); }
             catch (DbUpdateException ex) when (ex.InnerException is SqlException sqlEx && sqlEx.Number is 2601 or 2627)
             {
                 return Conflict(new { message = "A purchase order with this number already exists" });
             }
+
             var statusNote = oldStatus != order.Status
-    ? $", Status changed from {oldStatus} to {order.Status}"
-    : string.Empty;
+                ? $", Status changed from {oldStatus} to {order.Status}"
+                : string.Empty;
+
             await _auditLogService.LogAsync(
                 User,
                 "UpdatePurchaseOrder",
@@ -162,21 +140,12 @@ namespace neotonic.Controllers
             if (pageSize < 1 || pageSize > 100) pageSize = 20;
 
             var query = QueryWithIncludes();
-
             if (contractReviewId.HasValue)
                 query = query.Where(p => p.ContractReviewId == contractReviewId.Value);
 
-            var ordered = query
-                .OrderByDescending(p => p.CreationDate)
-                .ThenByDescending(p => p.Id);
-
+            var ordered = query.OrderByDescending(p => p.CreationDate).ThenByDescending(p => p.Id);
             var totalCount = await ordered.CountAsync();
-
-            var orders = await ordered
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
-
+            var orders = await ordered.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
             var fulfilled = await _context.GetFulfilledQuantitiesAsync(orders.Select(o => o.ContractReviewId));
 
             return Ok(new PagedResultDto<PurchaseOrderResponseDto>
@@ -187,14 +156,19 @@ namespace neotonic.Controllers
                 PageSize = pageSize
             });
         }
-
-        [Authorize(Roles = "Admin")]
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetOne(int id)
+        {
+            var po = await _context.PurchaseOrders.FindAsync(id);
+            if (po is null) return NotFound(new { message = "Purchase Order not found" });
+            return Ok(await ToResponseDto(id));
+        }
+        [Authorize(Roles = "Admin, Technical, Manager")]
         [HttpPut("status/{id}")]
         public async Task<IActionResult> ChangeStatus(int id, ChangeStatusDto dto)
         {
             var order = await _context.PurchaseOrders.FindAsync(id);
-            if (order is null)
-                return NotFound(new { message = "Purchase order not found" });
+            if (order is null) return NotFound(new { message = "Purchase order not found" });
 
             order.IsActive = dto.IsActive;
             await _context.SaveChangesAsync();
@@ -213,15 +187,11 @@ namespace neotonic.Controllers
         public async Task<IActionResult> Delete(int id)
         {
             var order = await _context.PurchaseOrders.FindAsync(id);
-            if (order is null)
-                return NotFound(new { message = "Purchase order not found" });
+            if (order is null) return NotFound(new { message = "Purchase order not found" });
 
             _context.PurchaseOrders.Remove(order);
 
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
+            try { await _context.SaveChangesAsync(); }
             catch (DbUpdateException)
             {
                 var conflictPayload = await _context.GetDeleteConflictsAsync(order);
@@ -237,10 +207,6 @@ namespace neotonic.Controllers
             return Ok(new { message = "Purchase order deleted successfully" });
         }
 
-        // ---- validation helpers ----
-
-        // The review and certificate must exist, be active, and the certificate must come
-        // from a sample of THAT review.
         private async Task<string?> ValidateLinksAsync(int contractReviewId, int certificateId)
         {
             var review = await _context.ContractReviews.FindAsync(contractReviewId);
@@ -248,18 +214,16 @@ namespace neotonic.Controllers
                 return "Contract review does not exist or is inactive";
 
             var certificate = await _context.CertificatesOfAnalysis
-                .Include(c => c.SupplierSample)
+                .Include(c => c.Sample)
                 .FirstOrDefaultAsync(c => c.Id == certificateId);
 
             if (certificate is null || !certificate.IsActive)
                 return "Certificate of analysis does not exist or is inactive";
 
-            if (certificate.SupplierSample.ContractReviewId != review.Id)
+            if (certificate.Sample.ContractReviewId != review.Id)
                 return "The certificate does not belong to the selected contract review";
 
             // ---- PM DECISION PENDING (2): only allow accepted certificates ----
-            // Currently a PO can be created from a rejected certificate. To block it, uncomment:
-            //
             // if (certificate.Result != AnalysisResults.Accepted)
             //     return "A purchase order can only be created from an accepted certificate";
 
@@ -267,34 +231,23 @@ namespace neotonic.Controllers
         }
 
         // ---- PM DECISION PENDING (1): over-fulfilment of the contract review ----
-        // Currently ALLOWED: a PO can be linked to an already fully covered contract review,
-        // and the total can exceed the review's quantity. The percentage shown on the
-        // contract review goes above 100 in that case.
-        // To block it: uncomment the block below (and keep the first line).
         private async Task<string?> CheckFulfillmentAsync(int contractReviewId, decimal quantity, int? excludePurchaseOrderId = null)
         {
-            await Task.CompletedTask; // remove this line once the block below is enabled
-
+            await Task.CompletedTask;
             // var review = await _context.ContractReviews.FindAsync(contractReviewId);
             // var fulfilled = (await _context.GetFulfilledQuantitiesAsync(new[] { contractReviewId }, excludePurchaseOrderId))
             //     .GetValueOrDefault(contractReviewId);
-            //
-            // if (fulfilled >= review!.Quantity)
-            //     return "This contract review is already fully covered by purchase orders";
-            //
+            // if (fulfilled >= review!.Quantity) return "This contract review is already fully covered by purchase orders";
             // if (fulfilled + quantity > review.Quantity)
             //     return $"Quantity exceeds the remaining {review.Quantity - fulfilled} of the contract review";
-
             return null;
         }
 
-        // ---- mapping ----
-
         private IQueryable<PurchaseOrder> QueryWithIncludes() =>
             _context.PurchaseOrders
-                .Include(p => p.CertificateOfAnalysis)
+                .Include(p => p.CertificateOfAnalysis).ThenInclude(c => c.Sample)
                 .Include(p => p.ContractReview).ThenInclude(r => r.Supplier)
-                .Include(p => p.ContractReview).ThenInclude(r => r.Material);
+                .Include(p => p.ContractReview).ThenInclude(r => r.RFQ).ThenInclude(rfq => rfq.Material);
 
         private async Task<PurchaseOrderResponseDto> ToResponseDto(int id)
         {
@@ -306,6 +259,8 @@ namespace neotonic.Controllers
         private static PurchaseOrderResponseDto ToDto(PurchaseOrder p, decimal fulfilled)
         {
             var review = p.ContractReview;
+            var rfq = review.RFQ;
+            var m = rfq.Material;
             var certificate = p.CertificateOfAnalysis;
             var (statusAr, statusEn) = p.Status.GetBilingualNames();
             var (resultAr, resultEn) = certificate.Result.GetBilingualNames();
@@ -342,10 +297,10 @@ namespace neotonic.Controllers
                 SupplierNameEn = review.Supplier.NameEn,
                 SupplierNameAr = review.Supplier.NameAr,
 
-                MaterialId = review.MaterialId,
-                MaterialNumber = review.Material.MaterialNumber,
-                MaterialNameEn = review.Material.NameEn,
-                MaterialNameAr = review.Material.NameAr,
+                MaterialId = m.Id,
+                MaterialNumber = m.MaterialNumber,
+                MaterialNameEn = m.NameEn,
+                MaterialNameAr = m.NameAr,
 
                 Notes = p.Notes,
                 IsActive = p.IsActive

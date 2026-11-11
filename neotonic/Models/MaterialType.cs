@@ -20,6 +20,10 @@ namespace neotonic.Models
         [Required]
         [Column("name_ar")]
         public string NameAr { get; set; } = string.Empty;
+        public int? FlowId { get; set; }
+
+        [ForeignKey(nameof(FlowId))]
+        public Flow? Flow { get; set; }
 
         [Column("is_active")]
         public bool IsActive { get; set; } = true;
