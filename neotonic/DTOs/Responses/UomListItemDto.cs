@@ -21,6 +21,7 @@ namespace neotonic.DTOs.Responses
         public decimal Quantity { get; set; }
         public int? MemoRWInId { get; set; }
         public long? MemoRWInNumber { get; set; }
+        public DateTime? MemoRWInDate { get; set; }
         public int? SupplierId { get; set; }
         public string? SupplierNumber { get; set; }
         public string? SupplierNameEn { get; set; }

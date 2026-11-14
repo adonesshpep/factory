@@ -144,7 +144,7 @@ namespace neotonic.Controllers
         }
 
         [HttpGet("index")]
-        public async Task<IActionResult> Index([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        public async Task<IActionResult> Index([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery]  CRStatus? status=null)
         {
             if (page < 1) page = 1;
             if (pageSize < 1 || pageSize > 100) pageSize = 20;
@@ -152,9 +152,15 @@ namespace neotonic.Controllers
             var query = _context.ContractReviews
                 .Include(c => c.Supplier)
                 .Include(c => c.RFQ).ThenInclude(r => r.Material)
+                .AsQueryable();
+
+            if (status.HasValue)
+            {
+                query = query.Where(c => c.Status == status.Value);
+            }
+            query = query
                 .OrderByDescending(c => c.CreationDate)
                 .ThenByDescending(c => c.Id);
-
             var totalCount = await query.CountAsync();
             var reviews = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
             var fulfilled = await _context.GetFulfilledQuantitiesAsync(reviews.Select(r => r.Id));

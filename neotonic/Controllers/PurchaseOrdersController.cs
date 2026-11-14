@@ -134,7 +134,8 @@ namespace neotonic.Controllers
         public async Task<IActionResult> Index(
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = 20,
-            [FromQuery] int? contractReviewId = null)
+            [FromQuery] int? contractReviewId = null,
+            [FromQuery] POStatus? status=null)
         {
             if (page < 1) page = 1;
             if (pageSize < 1 || pageSize > 100) pageSize = 20;
@@ -142,7 +143,8 @@ namespace neotonic.Controllers
             var query = QueryWithIncludes();
             if (contractReviewId.HasValue)
                 query = query.Where(p => p.ContractReviewId == contractReviewId.Value);
-
+            if (status.HasValue)
+                query = query.Where(p => p.Status == status.Value);
             var ordered = query.OrderByDescending(p => p.CreationDate).ThenByDescending(p => p.Id);
             var totalCount = await ordered.CountAsync();
             var orders = await ordered.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();

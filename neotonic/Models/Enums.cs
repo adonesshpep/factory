@@ -88,7 +88,8 @@ namespace neotonic.Models
     public enum SampleTypes
     {
         [Description("مورد|Supplier")] Supplier = 1,
-        [Description("استلام|Delivery")] Delivery = 2
+        [Description("استلام|Delivery")] Delivery = 2,
+        [Description("تحضير|Preparing")] Preparing = 3
     }
 
     // ---- inventory ----

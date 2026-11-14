@@ -388,21 +388,20 @@ namespace neotonic.Controllers
         // ---------------------------------------------------------------
 
         [HttpPost("{id}/complete-washing")]
-        public async Task<IActionResult> CompleteWashing(int id, StepReportLineDto dto) =>
-            await AdvanceBoxAsync(id, LocationIds.VirtualWashing, dto, "Washing", PreparingSteps.Washing);
+        public async Task<IActionResult> CompleteWashing(int id, WashingReportDto dto) =>
+            await AdvanceWashingAsync(id, dto);
 
         [HttpPost("{id}/complete-purification")]
-        public async Task<IActionResult> CompletePurification(int id, StepReportLineDto dto) =>
-            await AdvanceBoxAsync(id, LocationIds.VirtualPurification, dto, "Purification", PreparingSteps.Purification);
+        public async Task<IActionResult> CompletePurification(int id, PurificationReportDto dto) =>
+            await AdvancePurificationAsync(id, dto);
 
         [HttpPost("{id}/complete-sterilization")]
-        public async Task<IActionResult> CompleteSterilization(int id, StepReportLineDto dto) =>
-            await AdvanceBoxAsync(id, LocationIds.VirtualSterilization, dto, "Sterilization", PreparingSteps.Sterilization);
+        public async Task<IActionResult> CompleteSterilization(int id, SterilizationReportDto dto) =>
+            await AdvanceSterilizationAsync(id, dto);
 
         [HttpPost("{id}/complete-drying")]
-        public async Task<IActionResult> CompleteDrying(int id, StepReportLineDto dto) =>
-            await AdvanceBoxAsync(id, LocationIds.VirtualDrying, dto, "Drying", PreparingSteps.Drying);
-
+        public async Task<IActionResult> CompleteDrying(int id, DryingReportDto dto) =>
+            await AdvanceDryingAsync(id, dto);
         // ---------------------------------------------------------------
         // Helpers
         // ---------------------------------------------------------------
@@ -410,26 +409,248 @@ namespace neotonic.Controllers
         private string CurrentUserId() =>
             User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub)?.Value ?? "unknown";
 
-        private async Task<IActionResult> AdvanceBoxAsync(
-            int preparingOrderId,
-            int expectedCurrentLocationId,
-            StepReportLineDto dto,
-            string stepNameEn,
-            PreparingSteps step)
+
+
+        private async Task<IActionResult> AdvanceWashingAsync(int orderId, WashingReportDto dto) =>
+    await AdvanceBoxCoreAsync(orderId, LocationIds.VirtualWashing, dto.UomId, dto.BeforeWeight, dto.AfterWeight, dto.LossPercentage, "Washing", async (order, box, move, userId) =>
+    {
+        if (!await _context.Workers.AnyAsync(w => w.Id == dto.WorkerId))
+            throw new InvalidOperationException("Worker does not exist");
+
+        _context.WashingReports.Add(new WashingReport
         {
-            var order = await _context.PreparingOrders
-                .FirstOrDefaultAsync(o => o.Id == preparingOrderId);
+            PreparingOrderId = order.Id,
+            UomId = box.Id,
+            StockMoveId = move.Id,
+            BeforeWeight = dto.BeforeWeight,
+            AfterWeight = dto.AfterWeight,
+            LossPercentage = ComputeLoss(dto.BeforeWeight, dto.AfterWeight),
+            Impurities = dto.Impurities,
+            Temperature = dto.Temperature,
+            HumidityPercentage = dto.HumidityPercentage,
+            WorkerId = dto.WorkerId,
+            Notes = dto.Notes,
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow
+        });
+    });
+
+        private async Task<IActionResult> AdvancePurificationAsync(int orderId, PurificationReportDto dto) =>
+            await AdvanceBoxCoreAsync(orderId, LocationIds.VirtualPurification, dto.UomId, dto.BeforeWeight, dto.AfterWeight, dto.LossPercentage, "Purification", async (order, box, move, userId) =>
+            {
+                if (!await _context.Workers.AnyAsync(w => w.Id == dto.WorkerId))
+                    throw new InvalidOperationException("Worker does not exist");
+
+                _context.PurificationReports.Add(new PurificationReport
+                {
+                    PreparingOrderId = order.Id,
+                    UomId = box.Id,
+                    StockMoveId = move.Id,
+                    BeforeWeight = dto.BeforeWeight,
+                    AfterWeight = dto.AfterWeight,
+                    LossPercentage = ComputeLoss(dto.BeforeWeight, dto.AfterWeight),
+                    TheoreticalImpurityWeight = dto.TheoreticalImpurityWeight,
+                    PracticalImpurityWeight = dto.PracticalImpurityWeight,
+                    WorkerId = dto.WorkerId,
+                    Notes = dto.Notes,
+                    UserId = userId,
+                    CreatedAt = DateTime.UtcNow
+                });
+            });
+
+        private async Task<IActionResult> AdvanceDryingAsync(int orderId, DryingReportDto dto) =>
+            await AdvanceBoxCoreAsync(orderId, LocationIds.VirtualDrying, dto.UomId, dto.BeforeWeight, dto.AfterWeight, dto.LossPercentage, "Drying", async (order, box, move, userId) =>
+            {
+                var sample = await _context.Samples.FirstOrDefaultAsync(s => s.Id == dto.SampleId);
+                if (sample is null) throw new InvalidOperationException("Sample does not exist");
+                if (sample.SampleType != SampleTypes.Preparing) throw new InvalidOperationException("Sample is not a preparing sample");
+                if (sample.UomId != box.Id) throw new InvalidOperationException("Sample does not belong to this box");
+                if (!await _context.Workers.AnyAsync(w => w.Id == dto.WorkerId)) throw new InvalidOperationException("Worker does not exist");
+
+                _context.DryingReports.Add(new DryingReport
+                {
+                    PreparingOrderId = order.Id,
+                    UomId = box.Id,
+                    StockMoveId = move.Id,
+                    BeforeWeight = dto.BeforeWeight,
+                    AfterWeight = dto.AfterWeight,
+                    LossPercentage = ComputeLoss(dto.BeforeWeight, dto.AfterWeight),
+                    HumidityBeforePercentage = dto.HumidityBeforePercentage,
+                    HumidityAfterPercentage = dto.HumidityAfterPercentage,
+                    Duration = dto.Duration,
+                    DryingKind = dto.DryingKind,
+                    Temperature = dto.Temperature,
+                    SampleId = dto.SampleId,
+                    WorkerId = dto.WorkerId,
+                    Notes = dto.Notes,
+                    UserId = userId,
+                    CreatedAt = DateTime.UtcNow
+                });
+            });
+
+        private async Task<IActionResult> AdvanceSterilizationAsync(int orderId, SterilizationReportDto dto) =>
+            await AdvanceBoxCoreAsync(orderId, LocationIds.VirtualSterilization, dto.UomId, dto.BeforeWeight, dto.AfterWeight, dto.LossPercentage, "Sterilization", async (order, box, move, userId) =>
+            {
+                var sample = await _context.Samples.FirstOrDefaultAsync(s => s.Id == dto.SampleId);
+                if (sample is null) throw new InvalidOperationException("Sample does not exist");
+                if (sample.SampleType != SampleTypes.Preparing) throw new InvalidOperationException("Sample is not a preparing sample");
+                if (sample.UomId != box.Id) throw new InvalidOperationException("Sample does not belong to this box");
+                if (!await _context.Workers.AnyAsync(w => w.Id == dto.WorkerId)) throw new InvalidOperationException("Worker does not exist");
+
+                _context.SterilizationReports.Add(new SterilizationReport
+                {
+                    PreparingOrderId = order.Id,
+                    UomId = box.Id,
+                    StockMoveId = move.Id,
+                    BeforeWeight = dto.BeforeWeight,
+                    AfterWeight = dto.AfterWeight,
+                    LossPercentage = ComputeLoss(dto.BeforeWeight, dto.AfterWeight),
+                    Duration = dto.Duration,
+                    Wavelength = dto.Wavelength,
+                    Thickness = dto.Thickness,
+                    Speed = dto.Speed,
+                    Temperature = dto.Temperature,
+                    HumidityPercentage = dto.HumidityPercentage,
+                    SampleId = dto.SampleId,
+                    WorkerId = dto.WorkerId,
+                    Notes = dto.Notes,
+                    UserId = userId,
+                    CreatedAt = DateTime.UtcNow
+                });
+            });
+
+        private static decimal ComputeLoss(decimal before, decimal after) =>
+    before <= 0 ? 0m : Math.Round((before - after) / before * 100m, 2);
+
+        //private async Task<IActionResult> AdvanceBoxCoreAsync(
+        //    int preparingOrderId,
+        //    int expectedCurrentLocationId,
+        //    int uomId,
+        //    decimal beforeWeight,
+        //    decimal afterWeight,
+        //    decimal lossPercentageFromClient,
+        //    string stepNameEn,
+        //    Func<PreparingOrder, UOM, StockMove, string, Task> writeReportAsync)
+        //{
+        //    var order = await _context.PreparingOrders.FirstOrDefaultAsync(o => o.Id == preparingOrderId);
+        //    if (order is null) return NotFound(new { message = "Preparing order not found" });
+        //    if (order.CompletedAt.HasValue) return BadRequest(new { message = "Preparing order is already completed" });
+
+        //    var box = await _context.UOMs.FirstOrDefaultAsync(u => u.Id == uomId);
+        //    if (box is null) return NotFound(new { message = "Box not found" });
+        //    if (box.LocationId != expectedCurrentLocationId)
+        //        return Conflict(new { message = $"Box is not in the {stepNameEn} step" });
+        //    if (beforeWeight != box.Quantity)
+        //        return BadRequest(new { message = $"Before weight {beforeWeight} does not match box quantity {box.Quantity}" });
+        //    if (afterWeight > beforeWeight)
+        //        return BadRequest(new { message = "After weight cannot exceed before weight" });
+
+        //    var computedLoss = ComputeLoss(beforeWeight, afterWeight);
+        //    var clientLoss = Math.Round(lossPercentageFromClient, 2);
+        //    if (clientLoss != computedLoss)
+        //        return BadRequest(new { message = $"Loss percentage {clientLoss} does not match computed {computedLoss}" });
+
+        //    var protocolLocations = await _context.GetProtocolLocationsAsync(order.ProtocolId);
+        //    if (protocolLocations.Count == 0)
+        //        return BadRequest(new { message = "Protocol has no steps configured" });
+
+        //    int nextLocationId;
+        //    bool isLastStep;
+        //    try
+        //    {
+        //        var idx = PreparingStepResolver.GetCurrentStepIndex(protocolLocations, expectedCurrentLocationId);
+        //        if (idx < 0) return BadRequest(new { message = "Current step is not part of this protocol" });
+        //        isLastStep = idx == protocolLocations.Count - 1;
+        //        nextLocationId = await _context.GetNextDestinationAsync(protocolLocations, expectedCurrentLocationId);
+        //    }
+        //    catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
+
+        //    var userId = CurrentUserId();
+
+        //    await using var tx = await _context.Database.BeginTransactionAsync();
+        //    try
+        //    {
+        //        await _context.ApplyLossAsync(box, afterWeight, $"{stepNameEn} loss", userId);
+        //        await _context.SaveChangesAsync();
+
+        //        var fromLocationId = box.LocationId;
+        //        var fromShelfId = box.ShelfId;
+        //        box.LocationId = nextLocationId;
+        //        box.ShelfId = null;
+
+        //        var move = new StockMove
+        //        {
+        //            UomId = box.Id,
+        //            FromLocationId = fromLocationId,
+        //            ToLocationId = nextLocationId,
+        //            FromShelfId = fromShelfId,
+        //            ToShelfId = null,
+        //            Quantity = box.Quantity,
+        //            MoveType = StockMoveTypes.Manual,
+        //            SourceType = StockMoveSources.PreparingStep,
+        //            SourceId = order.Id,
+        //            Reason = $"{stepNameEn} completed",
+        //            MoveDate = DateTime.UtcNow,
+        //            UserId = userId
+        //        };
+        //        _context.StockMoves.Add(move);
+        //        await _context.SaveChangesAsync();
+
+        //        await writeReportAsync(order, box, move, userId);
+
+        //        await TryCompleteOrderAsync(order);
+        //        await _context.SaveChangesAsync();
+        //        await tx.CommitAsync();
+
+        //        await _audit.LogAsync(User, $"Complete{stepNameEn}Step",
+        //            $"Completed {stepNameEn} for box '{box.Barcode}' in preparing order '{order.Number}' (OrderId: {order.Id}, UomId: {box.Id})",
+        //            HttpContext.Connection.RemoteIpAddress?.ToString());
+
+        //        if (isLastStep)
+        //        {
+        //            await _notifications.NotifyAsync(
+        //                "Warehouse",
+        //                $"Box {box.Barcode} moved to I2 Accepted; put it away",
+        //                NotificationRelatedTypes.BoxNeedsPutAway,
+        //                relatedId: box.Id);
+        //            await _context.SaveChangesAsync();
+        //        }
+
+        //        return Ok(await ToResponseDto(order.Id));
+        //    }
+        //    catch
+        //    {
+        //        await tx.RollbackAsync();
+        //        throw;
+        //    }
+        //}
+        private async Task<IActionResult> AdvanceBoxCoreAsync(
+    int preparingOrderId,
+    int expectedCurrentLocationId,
+    int uomId,
+    decimal beforeWeight,
+    decimal afterWeight,
+    decimal lossPercentageFromClient,
+    string stepNameEn,
+    Func<PreparingOrder, UOM, StockMove, string, Task> writeReportAsync)
+        {
+            var order = await _context.PreparingOrders.FirstOrDefaultAsync(o => o.Id == preparingOrderId);
             if (order is null) return NotFound(new { message = "Preparing order not found" });
             if (order.CompletedAt.HasValue) return BadRequest(new { message = "Preparing order is already completed" });
 
-            var box = await _context.UOMs.FirstOrDefaultAsync(u => u.Id == dto.UomId);
+            var box = await _context.UOMs.FirstOrDefaultAsync(u => u.Id == uomId);
             if (box is null) return NotFound(new { message = "Box not found" });
             if (box.LocationId != expectedCurrentLocationId)
                 return Conflict(new { message = $"Box is not in the {stepNameEn} step" });
-            if (dto.BeforeWeight != box.Quantity)
-                return BadRequest(new { message = $"Before weight {dto.BeforeWeight} does not match box quantity {box.Quantity}" });
-            if (dto.AfterWeight > dto.BeforeWeight)
+            if (beforeWeight != box.Quantity)
+                return BadRequest(new { message = $"Before weight {beforeWeight} does not match box quantity {box.Quantity}" });
+            if (afterWeight > beforeWeight)
                 return BadRequest(new { message = "After weight cannot exceed before weight" });
+
+            var computedLoss = ComputeLoss(beforeWeight, afterWeight);
+            var clientLoss = Math.Round(lossPercentageFromClient, 2);
+            if (clientLoss != computedLoss)
+                return BadRequest(new { message = $"Loss percentage {clientLoss} does not match computed {computedLoss}" });
 
             var protocolLocations = await _context.GetProtocolLocationsAsync(order.ProtocolId);
             if (protocolLocations.Count == 0)
@@ -454,11 +675,9 @@ namespace neotonic.Controllers
             await using var tx = await _context.Database.BeginTransactionAsync();
             try
             {
-                // 1) Loss split (may reduce box.Quantity).
-                await _context.ApplyLossAsync(box, dto.AfterWeight, $"{stepNameEn} loss", userId);
+                await _context.ApplyLossAsync(box, afterWeight, $"{stepNameEn} loss", userId);
                 await _context.SaveChangesAsync();
 
-                // 2) Move the box.
                 var fromLocationId = box.LocationId;
                 var fromShelfId = box.ShelfId;
                 box.LocationId = nextLocationId;
@@ -482,68 +701,8 @@ namespace neotonic.Controllers
                 _context.StockMoves.Add(move);
                 await _context.SaveChangesAsync();
 
-                // 3) Report row — one table per step.
-                switch (step)
-                {
-                    case PreparingSteps.Washing:
-                        _context.WashingReports.Add(new WashingReport
-                        {
-                            PreparingOrderId = order.Id,
-                            UomId = box.Id,
-                            StockMoveId = move.Id,
-                            BeforeWeight = dto.BeforeWeight,
-                            AfterWeight = dto.AfterWeight,
-                            LossPercentage = dto.LossPercentage,
-                            Notes = dto.Notes,
-                            UserId = userId,
-                            CreatedAt = DateTime.UtcNow
-                        });
-                        break;
-                    case PreparingSteps.Purification:
-                        _context.PurificationReports.Add(new PurificationReport
-                        {
-                            PreparingOrderId = order.Id,
-                            UomId = box.Id,
-                            StockMoveId = move.Id,
-                            BeforeWeight = dto.BeforeWeight,
-                            AfterWeight = dto.AfterWeight,
-                            LossPercentage = dto.LossPercentage,
-                            Notes = dto.Notes,
-                            UserId = userId,
-                            CreatedAt = DateTime.UtcNow
-                        });
-                        break;
-                    case PreparingSteps.Sterilization:
-                        _context.SterilizationReports.Add(new SterilizationReport
-                        {
-                            PreparingOrderId = order.Id,
-                            UomId = box.Id,
-                            StockMoveId = move.Id,
-                            BeforeWeight = dto.BeforeWeight,
-                            AfterWeight = dto.AfterWeight,
-                            LossPercentage = dto.LossPercentage,
-                            Notes = dto.Notes,
-                            UserId = userId,
-                            CreatedAt = DateTime.UtcNow
-                        });
-                        break;
-                    case PreparingSteps.Drying:
-                        _context.DryingReports.Add(new DryingReport
-                        {
-                            PreparingOrderId = order.Id,
-                            UomId = box.Id,
-                            StockMoveId = move.Id,
-                            BeforeWeight = dto.BeforeWeight,
-                            AfterWeight = dto.AfterWeight,
-                            LossPercentage = dto.LossPercentage,
-                            Notes = dto.Notes,
-                            UserId = userId,
-                            CreatedAt = DateTime.UtcNow
-                        });
-                        break;
-                }
+                await writeReportAsync(order, box, move, userId);
 
-                // 4) Completion check.
                 await TryCompleteOrderAsync(order);
                 await _context.SaveChangesAsync();
                 await tx.CommitAsync();
@@ -564,16 +723,21 @@ namespace neotonic.Controllers
 
                 return Ok(await ToResponseDto(order.Id));
             }
+            catch (InvalidOperationException ex)
+            {
+                await tx.RollbackAsync();
+                return BadRequest(new { message = ex.Message });
+            }
             catch
             {
                 await tx.RollbackAsync();
                 throw;
             }
         }
-
         private async Task TryCompleteOrderAsync(PreparingOrder order)
         {
             if (order.TransferOrderId is null) return;
+            if (order.CompletedAt.HasValue) return;
 
             var firstTransfer = await _context.TransferOrders
                 .Include(t => t.Lines)
@@ -583,13 +747,18 @@ namespace neotonic.Controllers
             var initialBoxIds = firstTransfer.Lines.Select(l => l.UomId).ToList();
             if (initialBoxIds.Count == 0) return;
 
-            var notDoneCount = await _context.UOMs
-                .Where(u => initialBoxIds.Contains(u.Id)
-                            && u.LocationId != LocationIds.Scrap)
-                .Join(_context.Locations, u => u.LocationId, l => l.Id, (u, l) => l)
-                .CountAsync(l => !(l.InventoryId == InventoryIds.Preparing && l.Zone == InventoryZones.Accepted));
+            var i2Acc = await _context.Locations
+                .FirstOrDefaultAsync(l => l.InventoryId == InventoryIds.Preparing && l.Zone == InventoryZones.Accepted);
+            if (i2Acc is null) return;
 
-            if (notDoneCount == 0 && !order.CompletedAt.HasValue)
+            var boxLocations = await _context.UOMs
+                .Where(u => initialBoxIds.Contains(u.Id))
+                .Select(u => u.LocationId)
+                .ToListAsync();
+
+            var anyNotDone = boxLocations.Any(loc => loc != i2Acc.Id && loc != LocationIds.Scrap);
+
+            if (!anyNotDone)
                 order.CompletedAt = DateTime.UtcNow;
         }
 
@@ -600,10 +769,20 @@ namespace neotonic.Controllers
                 .Include(o => o.TransferOrder!).ThenInclude(t => t.FromLocation)
                 .Include(o => o.TransferOrder!).ThenInclude(t => t.ToLocation)
                 .Include(o => o.TransferOrder!).ThenInclude(t => t.Material)
+                .Include(o => o.TransferOrder!).ThenInclude(t => t.Lines).ThenInclude(l => l.Uom).ThenInclude(u => u.Location).ThenInclude(l => l.Inventory)
                 .Include(o => o.TransferOrder!).ThenInclude(t => t.Lines).ThenInclude(l => l.Uom).ThenInclude(u => u.Shelf).ThenInclude(s => s!.Location).ThenInclude(l => l.Inventory)
                 .FirstAsync(o => o.Id == id);
 
             var dto = ToDto(order);
+            var protocolLocations = await _context.GetProtocolLocationsAsync(order.ProtocolId);
+            dto.Steps = protocolLocations.Select((l, i) => new PreparingStepInfoDto
+            {
+                OrderIndex = i,
+                VirtualLocationId = l.Id,
+                VirtualLocationCode = l.Code,
+                VirtualLocationNameEn = l.NameEn,
+                VirtualLocationNameAr = l.NameAr
+            }).ToList();
 
             if (dto.TransferOrder is not null)
             {
@@ -619,6 +798,118 @@ namespace neotonic.Controllers
                     line.MemoRWInNumber = origin.MemoRWInNumber;
                 }
             }
+
+            dto.WashingReports = await _context.WashingReports
+                .Where(r => r.PreparingOrderId == order.Id)
+                .OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.Id)
+                .Select(r => new WashingReportResponseDto
+                {
+                    Id = r.Id,
+                    PreparingOrderId = r.PreparingOrderId,
+                    PreparingOrderNumber = order.Number,
+                    UomId = r.UomId,
+                    UomBarcode = r.Uom.Barcode,
+                    StockMoveId = r.StockMoveId,
+                    BeforeWeight = r.BeforeWeight,
+                    AfterWeight = r.AfterWeight,
+                    LossPercentage = r.LossPercentage,
+                    Impurities = r.Impurities,
+                    Temperature = r.Temperature,
+                    HumidityPercentage = r.HumidityPercentage,
+                    WorkerId = r.WorkerId,
+                    WorkerNumber = r.Worker.WorkerNumber,
+                    WorkerNameEn = r.Worker.NameEn,
+                    WorkerNameAr = r.Worker.NameAr,
+                    Notes = r.Notes,
+                    UserId = r.UserId,
+                    CreatedAt = r.CreatedAt
+                }).ToListAsync();
+
+            dto.PurificationReports = await _context.PurificationReports
+                .Where(r => r.PreparingOrderId == order.Id)
+                .OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.Id)
+                .Select(r => new PurificationReportResponseDto
+                {
+                    Id = r.Id,
+                    PreparingOrderId = r.PreparingOrderId,
+                    PreparingOrderNumber = order.Number,
+                    UomId = r.UomId,
+                    UomBarcode = r.Uom.Barcode,
+                    StockMoveId = r.StockMoveId,
+                    BeforeWeight = r.BeforeWeight,
+                    AfterWeight = r.AfterWeight,
+                    LossPercentage = r.LossPercentage,
+                    TheoreticalImpurityWeight = r.TheoreticalImpurityWeight,
+                    PracticalImpurityWeight = r.PracticalImpurityWeight,
+                    WorkerId = r.WorkerId,
+                    WorkerNumber = r.Worker.WorkerNumber,
+                    WorkerNameEn = r.Worker.NameEn,
+                    WorkerNameAr = r.Worker.NameAr,
+                    Notes = r.Notes,
+                    UserId = r.UserId,
+                    CreatedAt = r.CreatedAt
+                }).ToListAsync();
+
+            dto.DryingReports = await _context.DryingReports
+                .Where(r => r.PreparingOrderId == order.Id)
+                .OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.Id)
+                .Select(r => new DryingReportResponseDto
+                {
+                    Id = r.Id,
+                    PreparingOrderId = r.PreparingOrderId,
+                    PreparingOrderNumber = order.Number,
+                    UomId = r.UomId,
+                    UomBarcode = r.Uom.Barcode,
+                    StockMoveId = r.StockMoveId,
+                    BeforeWeight = r.BeforeWeight,
+                    AfterWeight = r.AfterWeight,
+                    LossPercentage = r.LossPercentage,
+                    HumidityBeforePercentage = r.HumidityBeforePercentage,
+                    HumidityAfterPercentage = r.HumidityAfterPercentage,
+                    Duration = r.Duration,
+                    DryingKind = r.DryingKind,
+                    Temperature = r.Temperature,
+                    SampleId = r.SampleId,
+                    SampleNumber = r.Sample.Number,
+                    WorkerId = r.WorkerId,
+                    WorkerNumber = r.Worker.WorkerNumber,
+                    WorkerNameEn = r.Worker.NameEn,
+                    WorkerNameAr = r.Worker.NameAr,
+                    Notes = r.Notes,
+                    UserId = r.UserId,
+                    CreatedAt = r.CreatedAt
+                }).ToListAsync();
+
+            dto.SterilizationReports = await _context.SterilizationReports
+                .Where(r => r.PreparingOrderId == order.Id)
+                .OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.Id)
+                .Select(r => new SterilizationReportResponseDto
+                {
+                    Id = r.Id,
+                    PreparingOrderId = r.PreparingOrderId,
+                    PreparingOrderNumber = order.Number,
+                    UomId = r.UomId,
+                    UomBarcode = r.Uom.Barcode,
+                    StockMoveId = r.StockMoveId,
+                    BeforeWeight = r.BeforeWeight,
+                    AfterWeight = r.AfterWeight,
+                    LossPercentage = r.LossPercentage,
+                    Duration = r.Duration,
+                    Wavelength = r.Wavelength,
+                    Thickness = r.Thickness,
+                    Speed = r.Speed,
+                    Temperature = r.Temperature,
+                    HumidityPercentage = r.HumidityPercentage,
+                    SampleId = r.SampleId,
+                    SampleNumber = r.Sample.Number,
+                    WorkerId = r.WorkerId,
+                    WorkerNumber = r.Worker.WorkerNumber,
+                    WorkerNameEn = r.Worker.NameEn,
+                    WorkerNameAr = r.Worker.NameAr,
+                    Notes = r.Notes,
+                    UserId = r.UserId,
+                    CreatedAt = r.CreatedAt
+                }).ToListAsync();
 
             return dto;
         }
@@ -667,6 +958,10 @@ namespace neotonic.Controllers
                     Id = l.Id,
                     UomId = l.UomId,
                     UomBarcode = l.Uom?.Barcode ?? string.Empty,
+                    UomLocationId = l.Uom?.LocationId,
+                    UomLocationCode = l.Uom?.Location?.Code,
+                    UomLocationNameEn = l.Uom?.Location?.NameEn,
+                    UomLocationNameAr = l.Uom?.Location?.NameAr,
                     BoxQuantity = l.Uom?.Quantity ?? 0m,
                     LineQuantity = l.Quantity,
                     IsScanned = l.IsScanned,

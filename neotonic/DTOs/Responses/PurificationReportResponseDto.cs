@@ -1,0 +1,30 @@
+﻿namespace neotonic.DTOs.Responses
+{
+    public class PurificationReportResponseDto
+    {
+        public int Id { get; set; }
+        public int PreparingOrderId { get; set; }
+        public string PreparingOrderNumber { get; set; } = string.Empty;
+
+        public int UomId { get; set; }
+        public string UomBarcode { get; set; } = string.Empty;
+
+        public int StockMoveId { get; set; }
+
+        public decimal BeforeWeight { get; set; }
+        public decimal AfterWeight { get; set; }
+        public decimal? LossPercentage { get; set; }
+
+        public decimal TheoreticalImpurityWeight { get; set; }
+        public decimal PracticalImpurityWeight { get; set; }
+
+        public int WorkerId { get; set; }
+        public int WorkerNumber { get; set; }
+        public string WorkerNameEn { get; set; } = string.Empty;
+        public string WorkerNameAr { get; set; } = string.Empty;
+
+        public string? Notes { get; set; }
+        public string UserId { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+    }
+}

@@ -465,6 +465,7 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using neotonic.Models;
+using neotonic.Models.HR;
 
 public class AppDbContext : IdentityDbContext<AppUser>
 {
@@ -535,6 +536,8 @@ public class AppDbContext : IdentityDbContext<AppUser>
     public DbSet<PurificationReport> PurificationReports { get; set; }
     public DbSet<SterilizationReport> SterilizationReports { get; set; }
     public DbSet<DryingReport> DryingReports { get; set; }
+    public DbSet<EmployeeFeedback> EmployeeFeedbacks { get; set; }
+    public DbSet<EmployeeFeedbackAnswer> EmployeeFeedbackAnswers { get; set; }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -663,10 +666,15 @@ public class AppDbContext : IdentityDbContext<AppUser>
 
         modelBuilder.Entity<Sample>(entity =>
         {
-            entity.ToTable("samples", t => t.HasCheckConstraint("ck_samples_link",
-                "([sample_type] = 1 AND [ContractReviewId] IS NOT NULL AND [UomId] IS NULL) OR " +
-                "([sample_type] = 2 AND [UomId] IS NOT NULL AND [ContractReviewId] IS NULL)"));
-
+            entity.ToTable("samples", t =>
+            {
+                t.HasCheckConstraint("ck_samples_link_supplier",
+                    "sample_type <> 1 OR (ContractReviewId IS NOT NULL AND UomId IS NULL)");
+                t.HasCheckConstraint("ck_samples_link_delivery",
+                    "sample_type <> 2 OR (UomId IS NOT NULL AND ContractReviewId IS NULL)");
+                t.HasCheckConstraint("ck_samples_link_preparing",
+                    "sample_type <> 3 OR (UomId IS NOT NULL AND ContractReviewId IS NULL)");
+            });
             entity.HasOne(s => s.ContractReview).WithMany()
                   .HasForeignKey(s => s.ContractReviewId).OnDelete(DeleteBehavior.Restrict);
 
@@ -946,6 +954,8 @@ public class AppDbContext : IdentityDbContext<AppUser>
                   .HasForeignKey(r => r.UomId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(r => r.StockMove).WithMany()
                   .HasForeignKey(r => r.StockMoveId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(r => r.Worker).WithMany()
+                  .HasForeignKey(r => r.WorkerId).OnDelete(DeleteBehavior.Restrict);
 
             entity.HasIndex(r => r.PreparingOrderId).HasDatabaseName("ix_washing_reports_prep_order");
             entity.HasIndex(r => r.UomId).HasDatabaseName("ix_washing_reports_uom");
@@ -958,21 +968,12 @@ public class AppDbContext : IdentityDbContext<AppUser>
                   .HasForeignKey(r => r.UomId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(r => r.StockMove).WithMany()
                   .HasForeignKey(r => r.StockMoveId).OnDelete(DeleteBehavior.Restrict);
-
+            entity.HasOne(r => r.Worker).WithMany()
+                  .HasForeignKey(r => r.WorkerId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(r => r.Sample).WithMany()
+                  .HasForeignKey(r => r.SampleId).OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(r => r.PreparingOrderId).HasDatabaseName("ix_drying_reports_prep_order");
             entity.HasIndex(r => r.UomId).HasDatabaseName("ix_drying_reports_uom");
-        });
-        modelBuilder.Entity<PurificationReport>(entity =>
-        {
-            entity.HasOne(r => r.PreparingOrder).WithMany()
-                  .HasForeignKey(r => r.PreparingOrderId).OnDelete(DeleteBehavior.Restrict);
-            entity.HasOne(r => r.Uom).WithMany()
-                  .HasForeignKey(r => r.UomId).OnDelete(DeleteBehavior.Restrict);
-            entity.HasOne(r => r.StockMove).WithMany()
-                  .HasForeignKey(r => r.StockMoveId).OnDelete(DeleteBehavior.Restrict);
-
-            entity.HasIndex(r => r.PreparingOrderId).HasDatabaseName("ix_purification_reports_prep_order");
-            entity.HasIndex(r => r.UomId).HasDatabaseName("ix_purification_reports_uom");
         });
         modelBuilder.Entity<SterilizationReport>(entity =>
         {
@@ -982,9 +983,26 @@ public class AppDbContext : IdentityDbContext<AppUser>
                   .HasForeignKey(r => r.UomId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(r => r.StockMove).WithMany()
                   .HasForeignKey(r => r.StockMoveId).OnDelete(DeleteBehavior.Restrict);
-
+            entity.HasOne(r => r.Worker).WithMany()
+                  .HasForeignKey(r => r.WorkerId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(r => r.Sample).WithMany()
+                  .HasForeignKey(r => r.SampleId).OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(r => r.PreparingOrderId).HasDatabaseName("ix_sterilization_reports_prep_order");
             entity.HasIndex(r => r.UomId).HasDatabaseName("ix_sterilization_reports_uom");
+        });
+        modelBuilder.Entity<PurificationReport>(entity =>
+        {
+            entity.HasOne(r => r.PreparingOrder).WithMany()
+                  .HasForeignKey(r => r.PreparingOrderId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(r => r.Uom).WithMany()
+                  .HasForeignKey(r => r.UomId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(r => r.StockMove).WithMany()
+                  .HasForeignKey(r => r.StockMoveId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(r => r.Worker).WithMany()
+                  .HasForeignKey(r => r.WorkerId).OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(r => r.PreparingOrderId).HasDatabaseName("ix_purification_reports_prep_order");
+            entity.HasIndex(r => r.UomId).HasDatabaseName("ix_purification_reports_uom");
         });
         modelBuilder.Entity<ReleaseOrder>(entity =>
         {
@@ -1045,6 +1063,27 @@ public class AppDbContext : IdentityDbContext<AppUser>
             new FlowStep { Id = 8, FlowId = 3, LocationId = LocationIds.FillingQuarantine, OrderIndex = 1 },
             new FlowStep { Id = 9, FlowId = 3, LocationId = LocationIds.ProductsProducedQuarantine, OrderIndex = 2 },
             new FlowStep { Id = 10, FlowId = 3, LocationId = LocationIds.ProductsReadyToSellQuarantine, OrderIndex = 3 });
+        // =====================HR========================
+        modelBuilder.Entity<EmployeeFeedback>(entity =>
+        {
+            entity.HasOne(f => f.Department).WithMany()
+                  .HasForeignKey(f => f.DepartmentId).OnDelete(DeleteBehavior.Restrict);
+
+            // deleting a worker keeps the feedback and makes it anonymous
+            entity.HasOne(f => f.Worker).WithMany()
+                  .HasForeignKey(f => f.WorkerId).OnDelete(DeleteBehavior.SetNull);
+
+            // deleting a questionnaire deletes its answers
+            entity.HasMany(f => f.Answers).WithOne(a => a.EmployeeFeedback)
+                  .HasForeignKey(a => a.EmployeeFeedbackId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EmployeeFeedbackAnswer>(entity =>
+            entity.ToTable("employee_feedback_answers", t =>
+            {
+                t.HasCheckConstraint("ck_feedback_answers_question", "[question_number] BETWEEN 1 AND 10");
+                t.HasCheckConstraint("ck_feedback_answers_score", "[score] IN (2, 4, 6, 8, 10)");
+            }));
     }
 
 }

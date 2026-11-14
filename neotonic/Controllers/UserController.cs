@@ -173,6 +173,38 @@ namespace neotonic.Controllers
 
             return Ok(new { message = $"User {(dto.IsActive ? "activated" : "deactivated")} successfully" });
         }
+        [Authorize(Policy = "ActiveUser")]
+        [HttpPost("change-password")]
+        public async Task<IActionResult> ChangePassword(ChangePasswordDto dto)
+        {
+            var userId = User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            if (userId is null) return Unauthorized();
+
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user is null) return NotFound(new { message = "User not found" });
+            if (!user.IsActive) return Unauthorized(new { message = "Account is deactivated" });
+
+            if (dto.NewPassword != dto.ConfirmNewPassword)
+                return BadRequest(new { message = "New password and confirmation do not match" });
+
+            if (dto.NewPassword == dto.OldPassword)
+                return BadRequest(new { message = "New password must be different from the old password" });
+
+            var result = await _userManager.ChangePasswordAsync(user, dto.OldPassword, dto.NewPassword);
+            if (!result.Succeeded)
+            {
+                var firstError = result.Errors.FirstOrDefault()?.Description ?? "Password change failed";
+                return BadRequest(new { message = firstError });
+            }
+
+            await _auditLogService.LogAsync(
+                User,
+                "ChangePassword",
+                $"User {user.UserName} changed their password",
+                HttpContext.Connection.RemoteIpAddress?.ToString());
+
+            return Ok(new { message = "Password changed successfully" });
+        }
         [Authorize(Roles ="Admin")]
         [HttpDelete("me")]
         public async Task<IActionResult> DeleteSelf()

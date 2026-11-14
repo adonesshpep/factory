@@ -121,7 +121,10 @@ namespace neotonic.Controllers
         }
 
         [HttpGet("index")]
-        public async Task<IActionResult> Index([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+        public async Task<IActionResult> Index(
+     [FromQuery] int page = 1,
+     [FromQuery] int pageSize = 20,
+     [FromQuery] RFQStatus? status = null)
         {
             if (page < 1) page = 1;
             if (pageSize < 1 || pageSize > 100) pageSize = 20;
@@ -129,20 +132,27 @@ namespace neotonic.Controllers
             var query = _context.RFQs
                 .Include(r => r.AnnualPlan)
                 .Include(r => r.Material)
-                .OrderByDescending(r => r.CreationDate).ThenByDescending(r => r.Id);
+                .AsQueryable();
 
-            var totalCount = await query.CountAsync();
-            var rfqs = await query.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+            if (status.HasValue)
+                query = query.Where(r => r.Status == status.Value);
+
+            var ordered = query
+                .OrderByDescending(r => r.CreationDate)
+                .ThenByDescending(r => r.Id);
+
+            var totalCount = await ordered.CountAsync();
+            var rfqs = await ordered.Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
+
             var rfqIds = rfqs.Select(r => r.Id).ToList();
-
             var contracted = await _context.GetContractedQuantitiesAsync(rfqIds);
-            var ordered = await _context.GetOrderedQuantitiesAsync(rfqIds);
+            var ordered2 = await _context.GetOrderedQuantitiesAsync(rfqIds);
 
             var items = rfqs.Select(r =>
             {
                 var (statusAr, statusEn) = r.Status.GetBilingualNames();
                 var con = contracted.GetValueOrDefault(r.Id, 0m);
-                var ord = ordered.GetValueOrDefault(r.Id, 0m);
+                var ord = ordered2.GetValueOrDefault(r.Id, 0m);
                 return new RFQListItemDto
                 {
                     Id = r.Id,

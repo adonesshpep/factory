@@ -30,6 +30,10 @@ namespace neotonic.DTOs.Responses
         public int Id { get; set; }
         public int UomId { get; set; }
         public string UomBarcode { get; set; } = string.Empty;
+        public int? UomLocationId { get; set; }
+        public string? UomLocationCode { get; set; }
+        public string? UomLocationNameEn { get; set; }
+        public string? UomLocationNameAr { get; set; }
         public decimal BoxQuantity { get; set; }
         public decimal LineQuantity { get; set; }
         public bool IsScanned { get; set; }

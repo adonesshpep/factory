@@ -9,6 +9,11 @@
         public string ProtocolNumber { get; set; } = string.Empty;
         public string ProtocolNameEn { get; set; } = string.Empty;
         public string ProtocolNameAr { get; set; } = string.Empty;
+        public List<PreparingStepInfoDto> Steps { get; set; } = new();
+        public List<WashingReportResponseDto> WashingReports { get; set; } = new();
+        public List<PurificationReportResponseDto> PurificationReports { get; set; } = new();
+        public List<DryingReportResponseDto> DryingReports { get; set; } = new();
+        public List<SterilizationReportResponseDto> SterilizationReports { get; set; } = new();
         public string? Notes { get; set; }
         public bool IsActive { get; set; }
 

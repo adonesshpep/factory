@@ -348,6 +348,7 @@ namespace neotonic.Services
                     d.UomId,
                     MemoRWInId = d.Memo.Id,
                     MemoRWInNumber = d.Memo.Number,
+                    MemoRWInDate = d.Memo.MemoDate,
                     d.Memo.PurchaseOrderId,
                     d.Memo.PurchaseOrder.Number,
                     SupplierId = d.Memo.PurchaseOrder.ContractReview.SupplierId,
@@ -385,6 +386,7 @@ namespace neotonic.Services
 
                     MemoRWInId = origin?.MemoRWInId,
                     MemoRWInNumber = origin?.MemoRWInNumber,
+                    MemoRWInDate = origin?.MemoRWInDate,
                     SupplierId = origin?.SupplierId,
                     SupplierNumber = origin?.SupplierNumber,
                     SupplierNameEn = origin?.NameEn,
